@@ -1,0 +1,27 @@
+model:  
+  input_dim: 4
+  output_dim: &output_dim 4
+  K: 3
+  hidden_layers: [128, 128]
+  layer_norm: False
+  activation: relu
+
+trainer:
+  epochs: 10
+  loss: "gmm"
+  patience: None
+
+optimizer: 
+  type: adam
+  lr: 0.00001
+
+logger:
+  log_dir: "logs/run1"
+
+dataset:
+  load_dir: "data/test2"
+  D: *output_dim
+  batch_size: 128
+  num_files: 1
+  vars_to_standardize: ["e_log_norm", "e_sqrt_norm", "e_incident_norm"]
+  transform: "log"

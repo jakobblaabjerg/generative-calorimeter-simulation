@@ -1,0 +1,23 @@
+time:
+  threshold: 200
+
+misalignment:
+  threshold: 6
+  method: "angle"
+
+z_hat:
+  threshold: 0 
+
+retainment:
+  box_size: 150
+  threshold: 90
+
+energy:
+  threshold: 0.00001
+
+detector:
+  membership: ["ECalBarrel", "ECalEndcap"]
+
+dataset:
+  split: [0.8, 0.1, 0.1]
+  keepvars: ["x_hat", "y_hat", "z_hat", "r_hat", "theta", "phi", "e", "e_incident", "eid", "eid_original"]
