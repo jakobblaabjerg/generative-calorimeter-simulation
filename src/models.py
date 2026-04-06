@@ -111,9 +111,9 @@ class MixtureDensityNetwork(nn.Module):
 
         log_jacobian = torch.zeros_like(x)        
 
-        if self.e_jac_func is not None and self.add_jacobian:
+        if self.add_jacobian and self.e_jac_func is not None:
             log_jacobian[:, -1] = self.e_jac_func(x[:, -1])
-        if self.z_hat_jac_func is not None and self.add_jacobian:
+        if self.add_jacobian and self.z_hat_jac_func is not None:
             log_jacobian[:, -2] = self.z_hat_jac_func(x[:, -2])
 
         log_jacobian = log_jacobian.sum(dim=1)
