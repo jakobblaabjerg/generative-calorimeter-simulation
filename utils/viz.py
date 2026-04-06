@@ -83,7 +83,7 @@ def plot_shower_3d(data, meta, eid):
 
     theta = meta_filtered["theta"][0]
     phi = meta_filtered["phi"][0]
-    e_incident = meta_filtered["e_incident"][0]
+    e_inc = meta_filtered["e_inc"][0]
 
     r = np.linalg.norm([x_c, y_c, z_c])
     x_true = r * np.sin(theta) * np.cos(phi)
@@ -100,7 +100,7 @@ def plot_shower_3d(data, meta, eid):
     ax.scatter(x_c, y_c, z_c, color='blue', s=100, label='Centroid')
 
     # plot steps
-    sd = data_filtered["sd"]
+    sd = data_filtered["d"]
     unique_sd = np.unique(sd)
     colors = plt.cm.tab20(np.linspace(0, 1, len(unique_sd)))
 
@@ -115,7 +115,7 @@ def plot_shower_3d(data, meta, eid):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    ax.set_title(rf"Event {eid} (e={e_incident:.2f}, $\theta$={theta* 180/np.pi:.2f}, $\phi$={phi* 180/np.pi:.2f})")
+    ax.set_title(rf"Event {eid} (e={e_inc:.2f}, $\theta$={theta* 180/np.pi:.2f}, $\phi$={phi* 180/np.pi:.2f})")
 
     ax.legend(loc='center left', bbox_to_anchor=(1.1, 0.5))
     # ax.legend()
@@ -156,7 +156,7 @@ def plot_shower_2d(data, meta, box_size=100, events=6, prj="XY", color_by="energ
 
         theta = meta_filtered["theta"][0] * 180/np.pi
         phi = meta_filtered["phi"][0] * 180/np.pi
-        e_incident = meta_filtered["e_incident"][0]
+        e_inc = meta_filtered["e_inc"][0]
 
         if color_by == "energy":            
             sc = ax.scatter(x_hat, y_hat, c=e, cmap="viridis", s=20)
@@ -165,7 +165,7 @@ def plot_shower_2d(data, meta, box_size=100, events=6, prj="XY", color_by="energ
 
         elif color_by == "detector":
 
-            sd = data_filtered["sd"]
+            sd = data_filtered["d"]
             unique_sd = np.unique(sd)
             colors = plt.cm.tab20(np.linspace(0, 1, len(unique_sd)))
 
@@ -178,7 +178,7 @@ def plot_shower_2d(data, meta, box_size=100, events=6, prj="XY", color_by="energ
         else:
             raise ValueError
 
-        ax.set_title(rf"Event {eid} (e={e_incident:.2f}, $\theta$={theta:.2f}, $\phi$={phi:.2f})")
+        ax.set_title(rf"Event {eid} (e={e_inc:.2f}, $\theta$={theta:.2f}, $\phi$={phi:.2f})")
 
         if prj[0] != "z":
             ax.set_xlim([-box_size/2, box_size/2])
@@ -204,9 +204,9 @@ def get_title(meta):
     eid = meta["eid"][0]
     theta = meta["theta"][0] * 180/np.pi
     phi = meta["phi"][0] * 180/np.pi
-    e_incident = meta["e"][0]
+    e_inc = meta["e_inc"][0]
 
-    return rf"Event {eid} (e={e_incident:.2f}, $\theta$={theta:.2f}, $\phi$={phi:.2f})"
+    return rf"Event {eid} (e={e_inc:.2f}, $\theta$={theta:.2f}, $\phi$={phi:.2f})"
 
 
 def plot_time_vs_energy(data, meta, eid, grouped_by_pid=False):

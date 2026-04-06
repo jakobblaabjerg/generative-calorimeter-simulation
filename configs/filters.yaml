@@ -21,3 +21,6 @@ detector:
 dataset:
   split: [0.8, 0.1, 0.1]
   keepvars: ["x_hat", "y_hat", "z_hat", "r_hat", "theta", "phi", "e", "e_incident", "eid", "eid_original"]
+  filters: ["time", "energy", "detector", "z_hat", "misalignment", "retainment"] 
+  aggregate: True
+  normalize: True

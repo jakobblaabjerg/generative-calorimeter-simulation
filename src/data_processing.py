@@ -5,6 +5,52 @@ import json
 from sklearn.model_selection import train_test_split
 
 
+def safe_underscore(name):
+    return f"_{name}" if name else ""
+
+
+def create_dataset(n_samples, phi=None, theta=None, e_inc=None, normalize=True, seed=None):
+
+    rng = np.random.default_rng(seed)
+    context = {}
+    
+    specs = {
+        "phi": (-np.pi, np.pi, phi),
+        "theta": (6 * np.pi / 180, 174 * np.pi / 180, theta),
+        "e_inc": (0.1, 100, e_inc)
+    }
+    
+    for key, (min_val, max_val, val) in specs.items():
+        if val is None:
+            u = rng.uniform(size=n_samples).astype(np.float32)
+            context[key] = u * (max_val - min_val) + min_val
+        else:
+            context[key] = np.repeat(val, n_samples).astype(np.float32)
+    
+    if normalize:
+        normalize_meta(context, inverse=False)
+
+    return context
+
+
+def concat_dict(dict1, dict2):
+
+    for k, v in dict2.items():
+        
+        if k in dict1:
+            
+            if k == "eid":
+                eids = dict1[k]
+                offset = len(np.unique(eids))
+                v = v + offset
+            dict1[k] = np.concatenate((dict1[k], v))
+        
+        else:
+            dict1[k] = v.copy()  
+    
+    return dict1
+
+
 def merge_dicts(dict1, dict2):
     """
     merges dict2 into dict1 if keys are not in dict1
@@ -15,7 +61,10 @@ def merge_dicts(dict1, dict2):
         if k not in dict1.keys():            
             dict1[k] = np.repeat(dict2[k], repeats=counts)
 
+    dict1["N"] = np.repeat(counts, repeats=counts)
+
     return dict1
+
 
 def load_stats(load_dir):
 
@@ -49,6 +98,7 @@ def load_split(split, load_dir, num_files):
 
         file_name = files[i]
         data, meta = load_split_file(split, load_dir, file_name)
+        
         dataset = merge_dicts(data, meta)
 
         for k, v in dataset.items():
@@ -61,10 +111,14 @@ def load_split(split, load_dir, num_files):
     return {k: np.concatenate(v) for k, v in combined.items()}
 
 
-def standardize_data(data, stats, vars_to_standardize, inverse=False):
+def standardize_data(data, stats, standardize_vars, inverse=False):
 
 
-    for var in vars_to_standardize:
+    for var in standardize_vars:
+
+        if not var in data:
+            continue
+
         mean = stats[var]["mean"]
         std = stats[var]["std"]
         
@@ -135,7 +189,7 @@ def compute_energy(meta):
     p_y = meta["p_y"]
     p_z = meta["p_z"]
 
-    meta["e_incident"] = (p_x**2 + p_y**2 + p_z**2)**0.5
+    meta["e_inc"] = (p_x**2 + p_y**2 + p_z**2)**0.5
 
 
 
@@ -235,16 +289,25 @@ def check_basis(basis, tol=1e-6):
     return unit_length, orthogonal
 
 
-def project_coordinates(data, meta):
+def project_coordinates(data, meta, inverse=False):
 
     eids, counts = np.unique(data["eid"], return_counts=True)
     basis = np.repeat(meta["basis"], counts, axis=0)
 
-    coords = np.stack([data["x"], data["y"], data["z"]], axis=1)
+    if not inverse:
+        coords = np.stack([data["x"], data["y"], data["z"]], axis=1)
+        data["x_hat"] = np.sum(coords * basis[:,:,0], axis=1)
+        data["y_hat"] = np.sum(coords * basis[:,:,1], axis=1)
+        data["z_hat"] = np.sum(coords * basis[:,:,2], axis=1)
 
-    data["x_hat"] = np.sum(coords * basis[:,:,0], axis=1)
-    data["y_hat"] = np.sum(coords * basis[:,:,1], axis=1)
-    data["z_hat"] = np.sum(coords * basis[:,:,2], axis=1)
+    else:
+        coords_hat = np.stack([data["x_hat"], data["y_hat"], data["z_hat"]], axis=1)
+        coords = (coords_hat[:,0,None] * basis[:,:,0] + coords_hat[:,1,None] * basis[:,:,1] + coords_hat[:,2,None] * basis[:,:,2])
+        
+        data["x"] = coords[:,0]
+        data["y"] = coords[:,1]
+        data["z"] = coords[:,2]
+
 
 
 def compute_retainment(data, meta, box_size):
@@ -270,15 +333,27 @@ def compute_r_hat(data):
     data["r_hat"] = r_hat
 
 
-def compute_static_features(data, meta):
+def compute_static_features(data, meta, inverse=False):
 
-    compute_angles(meta) 
-    compute_energy(meta)
-    compute_basis(meta)
-    compute_detector_distance(meta)
-    project_coordinates(data, meta)
-    center_z_hat(data, meta)
-    compute_r_hat(data)
+    if not inverse:
+
+        compute_angles(meta) 
+        compute_energy(meta)
+        compute_basis(meta)
+        compute_detector_distance(meta)
+        project_coordinates(data, meta)
+        center_z_hat(data, meta)
+        compute_r_hat(data)
+    
+    else:
+        data["d"] = np.repeat(str(0), len(data["eid"]))
+        compute_basis(meta)
+        center_z_hat(data, meta, inverse=True)
+        project_coordinates(data, meta, inverse=True)
+        center_z_hat(data, meta)
+        compute_centroids(data, meta)
+        compute_misalignment(meta)
+
 
 def filter_by_xy_box(data, box_size):
 
@@ -337,17 +412,15 @@ def compute_detector_distance(meta):
 
 
 
-def center_z_hat(data, meta):
+def center_z_hat(data, meta, inverse=False):
 
     z_hat = data["z_hat"]
     eids = data["eid"]
 
-    eids_unique, counts = np.unique(eids, return_counts=True)
+    dist = meta["entry_distance"][eids]
 
-    dist = meta["entry_distance"]
-    dist = np.repeat(dist, counts)
-
-    z_hat = z_hat-dist
+    sign = 1 if inverse else -1
+    z_hat = z_hat + sign * dist
     data["z_hat"] = z_hat
 
 
@@ -407,20 +480,30 @@ def load_h5py_file(file_dir, file_name):
     return data, meta   
 
 
+def get_file_names(load_dir, stage):
+
+    if stage == "raw":
+        return sorted(
+            (f for f in os.listdir(load_dir) if f.endswith(".h5")),
+            key=lambda f: int("".join(filter(str.isdigit, f)))
+        )
+    
+    else:
+        load_dir = os.path.join(load_dir, stage)
+        return sorted(
+            (f for f in os.listdir(load_dir) if f.endswith("data.npz")),
+            key=lambda f: int("".join(filter(str.isdigit, f)))
+        )
+
 
 class DataProcessor():
 
-    def __init__(self, file_dir, save_dir):
+    def __init__(self, save_dir, load_dir=None):
 
-        self.file_dir = file_dir
+        self.load_dir = load_dir
         self.save_dir = save_dir
 
         self.rng = np.random.default_rng(42)
-
-        self.files = sorted(
-            (f for f in os.listdir(file_dir) if f.endswith(".h5")),
-            key=lambda f: int("".join(filter(str.isdigit, f)))
-        )
 
         self.filter_map = {
             "time": self.filter_by_time,
@@ -436,27 +519,30 @@ class DataProcessor():
 
         self.data_filtered, self.meta_filtered = None, None
 
-        file_name = self.files[file_num]
-        self.current = os.path.splitext(file_name)[0].split("_")[-1]
-        self.data, self.meta = load_h5py_file(self.file_dir, file_name)
+        files = get_file_names(self.load_dir, stage="raw")
+        file_name = files[file_num]
+
+        self.file_idx = int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
+        
+        self.data, self.meta = load_h5py_file(self.load_dir, file_name)
         compute_static_features(self.data, self.meta)
         
 
-    def load_filtered(self, file_num=0):
+    def load_data(self, stage, file_num=0):
 
         self.data, self.meta = None, None
         self.filters = {}
+       
+        files = get_file_names(self.save_dir, stage)
+        file_name = files[file_num]
 
-        file_name = self.files[file_num]
-        self.current = os.path.splitext(file_name)[0].split("_")[-1]
+        self.file_idx = int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
 
-        load_dir = os.path.join(self.save_dir, "filtered")
-
-        self.data_filtered = dict(np.load(os.path.join(load_dir, f"{self.current}_data.npz")))
-        self.meta_filtered = dict(np.load(os.path.join(load_dir, f"{self.current}_meta.npz")))
+        setattr(self, f"data_{stage}", dict(np.load(os.path.join(self.save_dir, stage, f"file{self.file_idx}_data.npz"))))
+        setattr(self, f"meta_{stage}", dict(np.load(os.path.join(self.save_dir, stage, f"file{self.file_idx}_meta.npz"))))
 
 
-    def filter_data(self, config, filters=None, reset=True):
+    def filter_data(self, cfg, filters=None, reset=True):
 
         if reset:
             self.filters = {}
@@ -467,23 +553,50 @@ class DataProcessor():
         if filters is None:
             filters = ["time", "misalignment", "retainment", "z_hat"]
 
-        eids, counts = np.unique(self.data["eid"], return_counts=True)
-        self.before = dict(zip(eids, counts))
 
         for filter_name in filters:
 
             print(f"Filtering on {filter_name}")
-            params = vars(getattr(config, filter_name))
+            params = vars(getattr(cfg, filter_name))
             self.filter_map[filter_name](reindex=True, **params)
 
-        eids_after, steps_after = np.unique(self.data_filtered["eid_original"], return_counts=True)
-        self.after = dict(zip(eids_after, steps_after))
 
-    def get_raw_data(self):
-        return self.data, self.meta
+    def aggregate_data(self, reset=False):
 
-    def get_filtered_data(self):
-        return self.data_filtered, self.meta_filtered
+        if reset or self.data_filtered is None:
+            self.filters = {}
+            self.data_filtered = {k: v.copy() for k, v in self.data.items()} 
+       
+        data_filtered = self.data_filtered
+        eids_before, steps_before = np.unique(data_filtered["eid_original"], return_counts=True)
+
+        keys = np.rec.fromarrays([data_filtered["eid"], data_filtered["pid"], data_filtered["cid"]], names="eid, pid, cid")
+        unique_keys, first_idx, inverse, counts = np.unique(keys, return_inverse=True, return_counts=True, return_index=True)
+
+        for k in data_filtered.keys():
+
+            if k in ["eid", "pid", "cid"]:
+                data_filtered[k] = unique_keys[k]
+            elif k in ["eid_original", "d"]:
+                # first occurence
+                data_filtered[k] = data_filtered[k][first_idx]
+            elif k == "e":
+                # compute sum
+                data_filtered[k] = np.bincount(inverse, weights=data_filtered[k])             
+            else:
+                # compute averages
+                data_filtered[k] = np.bincount(inverse, weights=data_filtered[k])/counts 
+
+        self.data_filtered = data_filtered
+
+        eids_after, steps_after = np.unique(data_filtered["eid_original"], return_counts=True)
+        steps_removed = steps_before.sum() - steps_after.sum()
+
+        self.filters.setdefault("aggregation", {})
+
+        self.filters["aggregation"]["n_steps"] = steps_removed
+        self.filters["aggregation"]["n_events"] = 0
+        self.filters["aggregation"]["eids"] = []
 
 
     def get_key(self, filter):
@@ -605,17 +718,22 @@ class DataProcessor():
         self.meta_filtered = meta_filtered
 
 
-    def save_data(self, status_file=True): # save_filtered
-        
+    def save_data(self, stage): # save_filtered
+
+        # stage can be filtered, raw, sampled
+
         print("Saving data")
 
-        save_dir = os.path.join(self.save_dir, "filtered")
+        data = getattr(self, f"data_{stage}")
+        meta = getattr(self, f"meta_{stage}")
+
+        save_dir = os.path.join(self.save_dir, stage)
         os.makedirs(save_dir, exist_ok=True)
 
-        np.savez(os.path.join(save_dir, f"{self.current}_data.npz"), **self.data_filtered)
-        np.savez(os.path.join(save_dir, f"{self.current}_meta.npz"), **self.meta_filtered)
+        np.savez(os.path.join(save_dir, f"file{self.file_idx}_data.npz"), **data)
+        np.savez(os.path.join(save_dir, f"file{self.file_idx}_meta.npz"), **meta)
 
-        if status_file:
+        if stage == "filtered":
             self._write_status_file(save_dir)
 
         print("Save complete")
@@ -623,24 +741,31 @@ class DataProcessor():
 
     def _write_status_file(self, save_dir):
 
-        status_path = os.path.join(save_dir, f"{self.current}_status.txt")
+        status_path = os.path.join(save_dir, f"{self.file_idx}_status.txt")
 
         with open(status_path, "w") as f:
 
-            f.write(f"Dataset name: {self.current}\n")
+            f.write(f"Dataset name: {self.file_idx}\n")
             f.write("=" * 40 + "\n\n")
 
             for k in self.filters.keys():
 
-                filter_name = "_".join(k.split("_")[:-1])
+                if k == "aggregation":
+                    filter_name = k
+                else:
+                    filter_name = "_".join(k.split("_")[:-1])
+                
             
                 f.write(f"Filter: {filter_name}\n")
                 f.write(f"  Steps removed:  {self.filters[k]['n_steps']}\n")
                 f.write(f"  Events removed: {self.filters[k]['n_events']}\n")
-                f.write(f"  Parameters:\n")
-                
-                for param, val in self.filters[k]["params"].items():
-                    f.write(f"    - {param}: {val}\n")
+
+                if "params" in self.filters[k]:
+
+                    f.write(f"  Parameters:\n")
+                    
+                    for param, val in self.filters[k]["params"].items():
+                        f.write(f"    - {param}: {val}\n")
 
                 f.write("-" * 30 + "\n")
 
@@ -650,39 +775,40 @@ class DataProcessor():
             f.write(f"Remaining steps:  {len(self.data_filtered['eid'])}\n")   
 
 
-
-
-    def build_dataset(self, config, filters, normalize=True, debug=False):
+    def build_dataset(self, cfg, debug=False):
 
         self.stats = {}
+        files = get_file_names(self.load_dir, stage="filtered" if debug else "raw")
 
-        # first loop
-        for i in range(len(self.files)):
-
+        for i in range(len(files)):
             # load -> filter -> save -> clean -> normalize -> split -> save
 
             if debug:
                 print("Load filtered data")
-                self.load_filtered()
+                self.load_data(stage="filtered")
             else:
                 print("Load raw data")
                 self.load_raw(file_num=i)
-                self.filter_data(config=config, filters=filters, reset=True)
+                self.filter_data(cfg=cfg, filters=cfg.dataset.filters, reset=True)
+                
+                if cfg.dataset.aggregate:
+                    print("Aggregating data")
+                    self.aggregate_data()
+
                 self.save_data()
 
-            print("Normalizing data")
-            if normalize:
-                normalize_data(self.data_filtered, self.meta_filtered, box_size=config.retainment.box_size)
+            if cfg.dataset.normalize:
+                print("Normalizing data")
+                normalize_data(self.data_filtered, self.meta_filtered, cfg)
 
             print("Cleaning data")
-
-            self.clean_data(keepvars=config.dataset.keepvars)
+            self.clean_data(keepvars=cfg.dataset.keepvars)
 
             if not self.stats:
                 self.init_stats()
 
             print("Splitting data")
-            self.split_data(**vars(config.dataset))
+            self.split_data(split=cfg.dataset.split, keepvars=cfg.dataset.keepvars)
 
         self.save_stats()
 
@@ -699,7 +825,7 @@ class DataProcessor():
              if k in keepvars or k.endswith("norm")
              }
 
-    def split_data(self, split=[0.8, 0.1, 0.1], keepvars=None, merge=True):
+    def split_data(self, split=[0.8, 0.1, 0.1], keepvars=None):
 
         data = self.data_filtered
         meta = self.meta_filtered
@@ -780,8 +906,8 @@ class DataProcessor():
         save_dir = os.path.join(self.save_dir, split)
         os.makedirs(save_dir, exist_ok=True)
 
-        np.savez(os.path.join(save_dir, f"{self.current}_data.npz"), **data)
-        np.savez(os.path.join(save_dir, f"{self.current}_meta.npz"), **meta)
+        np.savez(os.path.join(save_dir, f"file{self.file_idx}_data.npz"), **data)
+        np.savez(os.path.join(save_dir, f"file{self.file_idx}_meta.npz"), **meta)
 
 
 class RunningStats:
@@ -813,104 +939,85 @@ class RunningStats:
         return np.sqrt(self.M2 / (self.n - 1))
 
 
+def normalize_meta(meta, inverse):
 
-def normalize_data(data, meta, box_size, inverse=False):
+    if not inverse:
+        meta["e_inc_norm"] = np.log1p(meta["e_inc"])
+        theta = meta["theta"]
+        phi = meta["phi"]
 
-    if inverse:
-        _denormalize(data, meta, box_size)
+        meta["dir_x_norm"] = np.sin(theta) * np.cos(phi)
+        meta["dir_y_norm"] = np.sin(theta) * np.sin(phi)
+        meta["dir_z_norm"] = np.cos(theta)
+    
     else:
-        _normalize(data, meta, box_size)
+        meta["e_inc"] = np.expm1(meta["e_inc_norm"])
+        dir_x_norm = meta["dir_x_norm"]
+        dir_y_norm = meta["dir_y_norm"]
+        dir_z_norm = meta["dir_z_norm"]
+        # dir_z_norm = np.clip(meta["dir_z_norm"], -1, 1)
+
+        meta["theta"] = np.arccos(dir_z_norm)
+        meta["phi"] = np.arctan2(dir_y_norm, dir_x_norm)
 
 
-def _normalize(data, meta, box_size):
+def normalize_data(data, meta, cfg, inverse=False):
 
-    # energy
-    meta["e_incident_norm"] = np.log1p(meta["e_incident"])
-
-    # direction
-    theta = meta["theta"]
-    phi = meta["phi"]
-
-    meta["dir_x_norm"] = np.sin(theta) * np.cos(phi)
-    meta["dir_y_norm"] = np.sin(theta) * np.sin(phi)
-    meta["dir_z_norm"] = np.cos(theta)
-
-    # event counts
+    normalize_meta(meta, inverse)
     _, counts = np.unique(data["eid"], return_counts=True)
+    scale_xy = cfg.retainment.box_size / 2
+    scale_e = cfg.energy.threshold
+    r_max = np.sqrt(2 * scale_xy**2)
 
-    # x/y position to [-1, 1]
-    scale = box_size / 2
-    data["x_hat_norm"] = data["x_hat"] / scale
-    data["y_hat_norm"] = data["y_hat"] / scale
+    if not inverse:
 
-    # radial distance to [0, 1]
-    r_max = np.sqrt(2 * scale**2)
-    r_hat = data["r_hat"]
-    data["r_hat_norm"] = r_hat / r_max
-    data["r_log_norm"] = np.log1p(r_hat) / np.log1p(r_max)
+        # normalize x/y position to [-1, 1]
+        data["x_hat_norm"] = data["x_hat"] / scale_xy
+        data["y_hat_norm"] = data["y_hat"] / scale_xy
 
+        # normalize radial distance to [0, 1]
+        r_hat = data["r_hat"]
+        data["r_hat_norm"] = r_hat / r_max
 
-    # z distance to [0, ~1.2]
-    max_distance = np.repeat(
-        meta["exit_distance"] - meta["entry_distance"],
-        counts
-    )
+        # normalize z distance to [0, ~1.2]
+        max_distance = np.repeat(meta["exit_distance"] - meta["entry_distance"], counts)
+        data["z_hat_norm"] = data["z_hat"] / max_distance
+        data["z_hat_log_norm"] = np.log((data["z_hat_norm"]) + 1e-6)
+        data["z_hat_sqrt_norm"] = np.sqrt(data["z_hat_norm"])
 
-    data["z_hat_norm"] = data["z_hat"] / max_distance
+        # log/sqrt transform of scaled energy
+        e_scaled = data["e"] / scale_e
+        data["e_log_norm"] = np.log(e_scaled)
+        data["e_sqrt_norm"] = np.sqrt(e_scaled)
 
-    e_incident = np.repeat(meta["e_incident"], counts)
-    e_rel = data["e"] / e_incident
-    data["e_log_norm"] = np.log1p(e_rel)
-    data["e_sqrt_norm"] = np.sqrt(e_rel)
+    else:
+        compute_detector_distance(meta)
 
+        # denormalize x/y position to [-scale, scale]
+        if "x_hat_norm" in data:
+            data["x_hat"] = data["x_hat_norm"] * scale_xy
+            data["y_hat"] = data["y_hat_norm"] * scale_xy
 
+        # denormalize radial distance to [0, r_max]
+        if "r_hat_norm" in data:
+            data["r_hat"] = data["r_hat_norm"] * r_max
 
-def _denormalize(data, meta, box_size):
+        # denormalize z distance to [0, max_distance]
+        max_distance = np.repeat(meta["exit_distance"] - meta["entry_distance"], counts)
 
-    # energy
-    meta["e_incident"] = np.expm1(meta["e_incident_norm"])
+        if "z_hat_norm" in data:
+            data["z_hat"] = data["z_hat_norm"] * max_distance
 
-    # direction
-    dir_x_norm = meta["dir_x_norm"]
-    dir_y_norm = meta["dir_y_norm"]
-    dir_z_norm = meta["dir_z_norm"]
-    # dir_z_norm = np.clip(meta["dir_z_norm"], -1, 1)
+        elif "z_hat_log_norm" in data:
+            data["z_hat"] = (np.exp(data["z_hat_log_norm"]) -1e-6) * max_distance
 
-    meta["theta"] = np.arccos(dir_z_norm)
-    meta["phi"] = np.arctan2(dir_y_norm, dir_x_norm)
+        elif "z_hat_sqrt_norm" in data:
+            z_hat_sqrt_norm = np.clip(data["z_hat_sqrt_norm"], -0.05, None)
+            data["z_hat"] = (z_hat_sqrt_norm**2) * max_distance
 
-    compute_detector_distance(meta)
-
-    _, counts = np.unique(data["eid"], return_counts=True)
-    scale = box_size / 2
-
-    data["x_hat"] = data["x_hat_norm"] * scale
-    data["y_hat"] = data["y_hat_norm"] * scale
-
-
-    r_max = np.sqrt(2 * scale**2)
-
-    if "r_hat_norm" in data:
-        data["r_hat"] = data["r_hat_norm"] * r_max
-
-    elif "r_log_norm" in data:
-        data["r_hat"] = np.expm1(data["r_log_norm"] * np.log1p(r_max))
-
-
-    max_distance = np.repeat(
-        meta["exit_distance"] - meta["entry_distance"],
-        counts
-    )
-
-    data["z_hat"] = data["z_hat_norm"] * max_distance
-
-    # energy
-    e_incident = np.repeat(meta["e_incident"], counts)
-
-    if "e_log_norm" in data:
-        e_rel = np.expm1(data["e_log_norm"])
-
-    elif "e_sqrt_norm" in data:
-        e_rel = data["e_sqrt_norm"] ** 2
-
-    data["e"] = e_rel * e_incident
+        # inverse transform energy
+        if "e_log_norm" in data:
+            e_scaled = np.exp(data["e_log_norm"])
+        elif "e_sqrt_norm" in data:
+            e_scaled = data["e_sqrt_norm"] ** 2
+        data["e"] = e_scaled * scale_e

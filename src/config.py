@@ -1,5 +1,6 @@
-import os, yaml
+import os, yaml, copy, random
 from types import SimpleNamespace 
+import numpy as np 
 
 def load_config(file_path):
 
@@ -27,3 +28,45 @@ def save_config(config, save_dir):
     config_path = os.path.join(save_dir, "config.yaml")
     with open(config_path, "w") as f:
         yaml.safe_dump(namespace_to_dict(config), f)
+
+
+def set_nested(cfg, key, value):
+    parts = key.split(".")
+    obj = cfg
+    for p in parts[:-1]:
+        if not hasattr(obj, p):
+            raise AttributeError(f"{p} not found in config")
+        obj = getattr(obj, p)
+    setattr(obj, parts[-1], value)
+
+
+def sample_config(cfg_base, search_space):
+
+    cfg_version = copy.deepcopy(cfg_base)
+
+    params = {k: sample_param(v) for k, v in search_space.items()}
+
+    for key, value in params.items():
+        set_nested(cfg_version, key, value)
+
+    return cfg_version, params
+
+
+def sample_param(spec):
+
+    param_type = spec["type"]
+
+    if param_type == "categorical":
+        return random.choice(spec["values"])
+
+    elif param_type == "uniform":
+        return float(np.random.uniform(spec["min"], spec["max"]))
+
+    elif param_type == "log_uniform":
+        return float(np.exp(np.random.uniform(np.log(spec["min"]), np.log(spec["max"]))))
+
+    elif param_type == "int":
+        return int(random.randint(spec["min"], spec["max"]))
+    
+    else:
+        raise ValueError(f"Unknown sampling type: {param_type}")

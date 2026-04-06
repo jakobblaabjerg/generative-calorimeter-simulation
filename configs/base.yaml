@@ -1,27 +1,43 @@
 model:  
-  input_dim: 4
-  output_dim: &output_dim 4
-  K: 3
+  input_dim: 4 
+  add_jacobian: True
+  spherical: &SPHERICAL False
+  k: 3
   hidden_layers: [128, 128]
   layer_norm: False
   activation: relu
+  transforms: &TRANSFORMS 
+    e: "log"
+    z_hat: "sqrt"
 
+  
 trainer:
-  epochs: 10
-  loss: "gmm"
-  patience: None
+  epochs: 3
+  patience: null
 
 optimizer: 
   type: adam
   lr: 0.00001
 
 logger:
-  log_dir: "logs/run1"
+  log_dir: "logs/run2"
 
-dataset:
-  load_dir: "data/test2"
-  D: *output_dim
+data_loader:
+  load_dir: &LOAD_DIR "data/test5"
+  spherical: *SPHERICAL
   batch_size: 128
   num_files: 1
-  vars_to_standardize: ["e_log_norm", "e_sqrt_norm", "e_incident_norm"]
-  transform: "log"
+  standardize_vars: &STANDARDIZE_VARS ["e_log_norm", "e_sqrt_norm", "e_inc_norm"]
+  transforms: *TRANSFORMS
+
+sampler:
+  num_files: 2
+  device: cuda
+  data_loader:
+    phi: null
+    theta: null
+    e_inc: null
+    n_samples: 3
+    batch_size: 1000
+    load_dir: *LOAD_DIR
+    standardize_vars: *STANDARDIZE_VARS
