@@ -48,8 +48,9 @@ class MixtureDensityNetwork(nn.Module):
         super().__init__()
 
         self.k = k
+        self.add_jacobian = add_jacobian
        
-        if add_jacobian:
+        if self.add_jacobian:
             self.z_hat_jac_func = make_jac_func(transforms.z_hat)
             self.e_jac_func = make_jac_func(transforms.e)
        
@@ -110,9 +111,9 @@ class MixtureDensityNetwork(nn.Module):
 
         log_jacobian = torch.zeros_like(x)        
 
-        if self.e_jac_func is not None:
+        if self.e_jac_func is not None and self.add_jacobian:
             log_jacobian[:, -1] = self.e_jac_func(x[:, -1])
-        if self.z_hat_jac_func is not None:
+        if self.z_hat_jac_func is not None and self.add_jacobian:
             log_jacobian[:, -2] = self.z_hat_jac_func(x[:, -2])
 
         log_jacobian = log_jacobian.sum(dim=1)
