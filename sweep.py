@@ -84,7 +84,7 @@ if __name__ == "__main__":
     search_space = {
         "optimizer.type": {
             "type": "categorical",
-            "values": ["adam", "sgd"]
+            "values": ["adam", "adamw"]
         },       
         "optimizer.lr": {
             "type": "log_uniform",
