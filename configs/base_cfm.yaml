@@ -1,0 +1,45 @@
+name: "cfm"
+
+model:  
+  cond_dim: 4 
+  spherical: &SPHERICAL False
+  transforms: &TRANSFORMS 
+    e: "log"
+    z_hat: "sqrt"
+  num_steps: 100
+  max_seq_len: &MAX_SEQ_LEN 10000 
+  aux_model_dir: logs/version_5
+
+  encoder:
+    hidden_size: 128
+    cell_type: "lstm"
+  
+  mlp:
+    hidden_layers: [128, 128]
+    activation: "relu"
+    layer_norm: False
+
+trainer:
+  epochs: 5
+  patience: 1
+
+optimizer: 
+  type: adam
+  lr: 0.00001
+
+logger:
+  log_dir: "logs/cfm"
+
+data_loader:
+  load_dir: "data/test5"
+  spherical: *SPHERICAL
+  batch_size: 128
+  num_files: 1
+  standardize_vars: ["e_log_norm", "e_sqrt_norm", "e_inc_norm"]
+  transforms: *TRANSFORMS
+  struc: "grouped"
+  sort_by_time: True
+  collate:
+    mode: "padded"
+    max_seq_len: *MAX_SEQ_LEN
+

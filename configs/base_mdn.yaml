@@ -1,0 +1,36 @@
+name: "mdn"
+
+model:  
+  cond_dim: 4 
+  add_jacobian: True
+  spherical: &SPHERICAL False
+  k: 6
+  alpha: 10000
+  hidden_layers: [128, 128, 128]
+  layer_norm: True
+  activation: sigmoid
+  transforms: &TRANSFORMS 
+    e: "log"
+    z_hat: "sqrt"
+
+trainer:
+  epochs: 50
+  patience: 50
+
+optimizer: 
+  type: adam
+  lr: 0.000019248016321617105
+
+logger:
+  log_dir: "logs/final/mdn"
+
+data_loader:
+  load_dir: "data/test6"
+  spherical: *SPHERICAL
+  batch_size: 256
+  num_files: 1
+  standardize_vars: ["e_log_norm", "e_sqrt_norm", "e_inc_norm"]
+  transforms: *TRANSFORMS
+  struc: "flat"
+
+

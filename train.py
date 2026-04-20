@@ -1,7 +1,7 @@
 from src.config import load_config, save_config
 from src.logger import Logger
-from src.datasets import get_data_loader
-from src.models import MixtureDensityNetwork
+from src.datasets import get_data_loader, get_collate_fn
+from src.models import MODEL_REGISTRY
 from src.optimizers import create_optimizer
 from src.trainer import Trainer
 
@@ -13,12 +13,13 @@ def run_train(cfg):
     cfg.run_dir = run_dir
     save_config(cfg, run_dir)
 
+
     print("Setting up loaders")
     train_loader = get_data_loader(split="train", **vars(cfg.data_loader))
     val_loader = get_data_loader(split="val", **vars(cfg.data_loader))
 
     print("Initializing model")
-    model = MixtureDensityNetwork(**vars(cfg.model))
+    model = MODEL_REGISTRY[cfg.name](cfg.model)
     optimizer = create_optimizer(model, cfg.optimizer)
 
     print("Starting training")
@@ -28,5 +29,5 @@ def run_train(cfg):
 
 if __name__ == "__main__":
 
-    cfg_base = load_config("configs/base.yaml")
+    cfg_base = load_config("configs/base_mdn.yaml")
     run_train(cfg_base)

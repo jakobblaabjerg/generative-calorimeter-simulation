@@ -9,10 +9,10 @@ def safe_underscore(name):
     return f"_{name}" if name else ""
 
 
-def create_dataset(n_samples, phi=None, theta=None, e_inc=None, normalize=True, seed=None):
+def create_meta(n_samples, phi=None, theta=None, e_inc=None, normalize=True, seed=None):
 
     rng = np.random.default_rng(seed)
-    context = {}
+    meta = {}
     
     specs = {
         "phi": (-np.pi, np.pi, phi),
@@ -23,14 +23,14 @@ def create_dataset(n_samples, phi=None, theta=None, e_inc=None, normalize=True, 
     for key, (min_val, max_val, val) in specs.items():
         if val is None:
             u = rng.uniform(size=n_samples).astype(np.float32)
-            context[key] = u * (max_val - min_val) + min_val
+            meta[key] = u * (max_val - min_val) + min_val
         else:
-            context[key] = np.repeat(val, n_samples).astype(np.float32)
+            meta[key] = np.repeat(val, n_samples).astype(np.float32)
     
     if normalize:
-        normalize_meta(context, inverse=False)
+        normalize_meta(meta, inverse=False)
 
-    return context
+    return meta
 
 
 def concat_dict(dict1, dict2):
@@ -67,12 +67,11 @@ def merge_dicts(dict1, dict2):
 
 
 def load_stats(load_dir):
-
     file_path = os.path.join(load_dir, "stats.json")
-
+    
     with open(file_path, "r") as f:
         stats = json.load(f)
-
+    
     return stats
 
 
@@ -84,31 +83,33 @@ def load_split_file(split, load_dir, file_name):
     return dict(data), dict(meta)
 
 
+def append_to_dict(data, combined):
+
+    for k, v in data.items():
+        if k not in combined:
+            combined[k] = []
+        combined[k].append(v)
+
+
 def load_split(split, load_dir, num_files):
 
-    ## only works for with merge of data and meta
-    files = sorted(
-        ["_".join(f.split("_")[:-1]) for f in os.listdir(os.path.join(load_dir, split)) if f.endswith("data.npz")],
-        key=lambda f: int("".join(filter(str.isdigit, f)))
-    )
+    data_combined = {}
+    meta_combined = {}
 
-    combined = {}
+    files = get_file_names(load_dir, split)
 
     for i in range(num_files):
 
-        file_name = files[i]
+        file_name = "_".join(files[i].split("_")[:-1])
         data, meta = load_split_file(split, load_dir, file_name)
+
+        append_to_dict(data, data_combined)
+        append_to_dict(meta, meta_combined)
         
-        dataset = merge_dicts(data, meta)
-
-        for k, v in dataset.items():
-
-            if k not in combined:
-                combined[k] = []
-
-            combined[k].append(v)
+    data_combined = {k: np.concatenate(v) for k, v in data_combined.items()}
+    meta_combined = {k: np.concatenate(v) for k, v in meta_combined.items()}
     
-    return {k: np.concatenate(v) for k, v in combined.items()}
+    return data_combined, meta_combined 
 
 
 def standardize_data(data, stats, standardize_vars, inverse=False):
@@ -479,273 +480,275 @@ def load_h5py_file(file_dir, file_name):
 
     return data, meta   
 
+def get_file_idx(file_name):
+    return int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
 
-def get_file_names(load_dir, stage):
 
-    if stage == "raw":
-        return sorted(
-            (f for f in os.listdir(load_dir) if f.endswith(".h5")),
+def get_file_names(file_dir, folder_name):
+
+    if folder_name == "raw":
+        files = sorted(
+            (f for f in os.listdir(file_dir) if f.endswith(".h5")),
             key=lambda f: int("".join(filter(str.isdigit, f)))
         )
-    
+
     else:
-        load_dir = os.path.join(load_dir, stage)
-        return sorted(
-            (f for f in os.listdir(load_dir) if f.endswith("data.npz")),
+        files = sorted(
+            (f for f in os.listdir(os.path.join(file_dir, folder_name)) if f.endswith("data.npz")),
             key=lambda f: int("".join(filter(str.isdigit, f)))
         )
+
+    return files
+
 
 
 class DataProcessor():
 
-    def __init__(self, save_dir, load_dir=None):
+    def __init__(
+            self, 
+            cfg, 
+            output_dir,
+            input_dir=None, 
+            ):
 
-        self.load_dir = load_dir
-        self.save_dir = save_dir
 
+        self.cfg = cfg
+        self.output_dir = output_dir 
+        self.input_dir = input_dir 
+
+        self.stats = self.load_stats() # load it if exists 
+        
         self.rng = np.random.default_rng(42)
 
         self.filter_map = {
-            "time": self.filter_by_time,
-            "energy": self.filter_by_energy,
+            "time":         self.filter_by_time,
+            "energy":       self.filter_by_energy,
             "misalignment": self.filter_by_misalignment,
-            "retainment": self.filter_by_retainment,
-            "z_hat": self.filter_by_z_hat,
-            "detector": self.filter_by_detector
+            "retainment":   self.filter_by_retainment,
+            "z_hat":        self.filter_by_z_hat,
+            "detector":     self.filter_by_detector
         }
 
+    def load_raw(self, load_dir, file_name):
+        """
+        load_dir: directory to load raw files from 
+        file_num: file idx of file to use 
+        """               
+        data, meta = load_h5py_file(load_dir, file_name)
+        compute_static_features(data, meta)
 
-    def load_raw(self, file_num=0):
-
-        self.data_filtered, self.meta_filtered = None, None
-
-        files = get_file_names(self.load_dir, stage="raw")
-        file_name = files[file_num]
-
-        self.file_idx = int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
-        
-        self.data, self.meta = load_h5py_file(self.load_dir, file_name)
-        compute_static_features(self.data, self.meta)
+        return data, meta
         
 
-    def load_data(self, stage, file_num=0):
+    def load_data(self, stage, file_idx):
 
-        self.data, self.meta = None, None
+        # reset filters 
         self.filters = {}
        
-        files = get_file_names(self.save_dir, stage)
-        file_name = files[file_num]
+        file_name = f"file{file_idx}"
+        file_dir = os.path.join(self.output_dir, stage)
 
-        self.file_idx = int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
+        data = dict(np.load(os.path.join(file_dir, f"{file_name}_data.npz")))
+        meta = dict(np.load(os.path.join(file_dir, f"{file_name}_meta.npz")))
 
-        setattr(self, f"data_{stage}", dict(np.load(os.path.join(self.save_dir, stage, f"file{self.file_idx}_data.npz"))))
-        setattr(self, f"meta_{stage}", dict(np.load(os.path.join(self.save_dir, stage, f"file{self.file_idx}_meta.npz"))))
+        return data, meta
 
 
-    def filter_data(self, cfg, filters=None, reset=True):
+    def filter_data(self, data, meta, filters=None, reset=True):
 
         if reset:
             self.filters = {}
-            
-            self.data_filtered = {k: v.copy() for k, v in self.data.items()}
-            self.meta_filtered = {k: v.copy() for k, v in self.meta.items()}
+        
+        # copy input
+        data_filtered = {k: v.copy() for k, v in data.items()}
+        meta_filtered = {k: v.copy() for k, v in meta.items()}
 
+        # default filters
         if filters is None:
             filters = ["time", "misalignment", "retainment", "z_hat"]
 
-
+        # loop through filters
         for filter_name in filters:
-
             print(f"Filtering on {filter_name}")
-            params = vars(getattr(cfg, filter_name))
-            self.filter_map[filter_name](reindex=True, **params)
+            params = vars(getattr(self.cfg, filter_name))
+            data_filtered, meta_filtered = self.filter_map[filter_name](data_filtered, meta_filtered, **params)
 
+        # reindex only once after all filters
+        data_filtered, meta_filtered = reindex_eid(data_filtered, meta_filtered)
 
-    def aggregate_data(self, reset=False):
+        return data_filtered, meta_filtered
 
-        if reset or self.data_filtered is None:
+    def aggregate_data(self, data, reset=False):
+
+        if reset:
             self.filters = {}
-            self.data_filtered = {k: v.copy() for k, v in self.data.items()} 
+        
+        data_agg = {k: v.copy() for k, v in data.items()} 
        
-        data_filtered = self.data_filtered
-        eids_before, steps_before = np.unique(data_filtered["eid_original"], return_counts=True)
-
-        keys = np.rec.fromarrays([data_filtered["eid"], data_filtered["pid"], data_filtered["cid"]], names="eid, pid, cid")
+        _, steps_before = np.unique(data_agg["eid_original"], return_counts=True)
+        keys = np.rec.fromarrays([data_agg["eid"], data_agg["pid"], data_agg["cid"]], names="eid, pid, cid")
         unique_keys, first_idx, inverse, counts = np.unique(keys, return_inverse=True, return_counts=True, return_index=True)
 
-        for k in data_filtered.keys():
+        for k in data_agg.keys():
 
             if k in ["eid", "pid", "cid"]:
-                data_filtered[k] = unique_keys[k]
+                data_agg[k] = unique_keys[k]
             elif k in ["eid_original", "d"]:
                 # first occurence
-                data_filtered[k] = data_filtered[k][first_idx]
+                data_agg[k] = data_agg[k][first_idx]
             elif k == "e":
                 # compute sum
-                data_filtered[k] = np.bincount(inverse, weights=data_filtered[k])             
+                data_agg[k] = np.bincount(inverse, weights=data_agg[k])             
             else:
                 # compute averages
-                data_filtered[k] = np.bincount(inverse, weights=data_filtered[k])/counts 
+                data_agg[k] = np.bincount(inverse, weights=data_agg[k])/counts 
 
-        self.data_filtered = data_filtered
-
-        eids_after, steps_after = np.unique(data_filtered["eid_original"], return_counts=True)
+        _, steps_after = np.unique(data_agg["eid_original"], return_counts=True)
         steps_removed = steps_before.sum() - steps_after.sum()
 
+
+        # make this cleaner !? 
         self.filters.setdefault("aggregation", {})
 
         self.filters["aggregation"]["n_steps"] = steps_removed
         self.filters["aggregation"]["n_events"] = 0
         self.filters["aggregation"]["eids"] = []
 
+        return data_agg 
 
-    def get_key(self, filter):
+    def get_key(self, filter_name):
 
         suffixes = []
-
         for k in self.filters.keys():
-            if k.startswith(f"{filter}_"):
+            if k.startswith(f"{filter_name}_"):
                 suffixes.append(int(k.split("_")[-1]))
+        return f"{filter_name}_{max(suffixes, default=0) + 1}"
 
-        return f"{filter}_{max(suffixes, default=0) + 1}"
-
-
-    def filter_by_time(self, threshold=200, reindex=False):
+    def filter_by_time(self, data, meta, threshold=200, reindex=True):
 
         params = {"threshold": threshold}
-        key = self.get_key(filter="time")
+        key = self.get_key(filter_name="time")
         self.filters[key] = {"params": params}
 
-        data_mask = self.data_filtered["t"] <= threshold
-        self._apply_filter(filter_name=key, data_mask=data_mask, reindex=reindex)
+        mask = data["t"] <= threshold
+        return self._apply_filter(data, meta, filter_name=key, mask=mask, level="data", reindex=reindex)
 
-
-    def filter_by_energy(self, threshold=0.00001, reindex=False):
+    def filter_by_energy(self, data, meta, threshold=0.00001, reindex=True):
 
         params = {"threshold": threshold}
-        key = self.get_key(filter="energy")
+        key = self.get_key(filter_name="energy")
         self.filters[key] = {"params": params}
 
-        data_mask = self.data_filtered["e"] >= threshold
-        self._apply_filter(filter_name=key, data_mask=data_mask, reindex=reindex)
+        mask = data["e"] >= threshold
+        return self._apply_filter(data, meta, filter_name=key, mask=mask, level="data", reindex=reindex)
 
 
-    def filter_by_misalignment(self, threshold=6, method="angle", reindex=False):
+    def filter_by_misalignment(self, data, meta, threshold=6, method="angle", reindex=True):
 
         params = {"threshold": threshold, "method": method}
-        key = self.get_key(filter="misalignment")
+        key = self.get_key(filter_name="misalignment")
         self.filters[key] = {"params": params}
 
         # remember to recompute centroids before using.        
-        compute_centroids(self.data_filtered, self.meta_filtered) 
-        compute_misalignment(self.meta_filtered)
+        compute_centroids(data, meta) 
+        compute_misalignment(meta)
 
-        meta_mask = self.meta_filtered[f"err_{method}"] < threshold
-        self._apply_filter(filter_name=key, meta_mask=meta_mask, reindex=reindex)
+        mask = meta[f"err_{method}"] < threshold
+        return self._apply_filter(data, meta, filter_name=key, mask=mask, level="meta", reindex=reindex)
 
     
-    def filter_by_detector(self, membership, reindex=False):
+    def filter_by_detector(self, data, meta, membership, reindex=True):
 
         params = {"membership": membership}
-        key = self.get_key(filter="detector")
+        key = self.get_key(filter_name="detector")
         self.filters[key] = {"params": params}
 
-        data_mask = np.isin(self.data_filtered["d"], membership)
-        self._apply_filter(filter_name=key, data_mask=data_mask, reindex=reindex)
+        mask = np.isin(data["d"], membership)
+        return self._apply_filter(data, meta, filter_name=key, mask=mask, level="data", reindex=reindex)
 
 
-    def filter_by_z_hat(self, threshold=0, reindex=False):
+    def filter_by_z_hat(self, data, meta, threshold=0, reindex=True):
 
         params = {"threshold": threshold}
-        key = self.get_key(filter="z_hat")
+        key = self.get_key(filter_name="z_hat")
         self.filters[key] = {"params": params}
 
-        data_mask = self.data_filtered["z_hat"] >= threshold
-        self._apply_filter(filter_name=key, data_mask=data_mask, reindex=reindex)
+        mask = data["z_hat"] >= threshold
+        return self._apply_filter(data, meta, filter_name=key, mask=mask, level="data", reindex=reindex)
 
 
-    def filter_by_retainment(self, box_size, threshold=90, reindex=False):
+    def filter_by_retainment(self, data, meta, box_size, threshold=90, reindex=True):
 
         params = {"threshold": threshold, "box_size": box_size}
-        key = self.get_key(filter="retainment")
+        key = self.get_key(filter_name="retainment")
         self.filters[key] = {"params": params}
 
-        compute_retainment(self.data_filtered, self.meta_filtered, box_size=box_size)
+        compute_retainment(data, meta, box_size=box_size)
 
-        meta_mask = self.meta_filtered["retainment_steps"] >= threshold
-        self._apply_filter(filter_name=key, meta_mask=meta_mask, reindex=reindex)
+        mask1 = meta["retainment_steps"] >= threshold
+        data, meta = self._apply_filter(data, meta, filter_name=key, mask=mask1, level="meta", reindex=reindex)
 
-        data_mask = (
-            (np.abs(self.data_filtered["x_hat"]) <= box_size / 2) &
-            (np.abs(self.data_filtered["y_hat"]) <= box_size / 2)
+        mask2 = (
+            (np.abs(data["x_hat"]) <= box_size / 2) &
+            (np.abs(data["y_hat"]) <= box_size / 2)
         )
-        self._apply_filter(filter_name=key, data_mask=data_mask, reindex=reindex)
+        return self._apply_filter(data, meta, filter_name=key, mask=mask2, level="data", reindex=reindex)
 
 
-    def _apply_filter(self, filter_name, data_mask=None, meta_mask=None, reindex=False):
 
-        data_filtered = self.data_filtered
-        meta_filtered = self.meta_filtered
+    def _apply_filter(self, data, meta, filter_name, mask, level, reindex):
 
-        eids_before, steps_before = np.unique(data_filtered["eid_original"], return_counts=True)
+        eids_before, steps_before = np.unique(data["eid_original"], return_counts=True)
 
         # step-level filtering
-        if data_mask is not None: 
-            data_filtered = filter_dict(data_filtered, data_mask)
-            meta_filtered = remove_eids(data_filtered, meta_filtered)
+        if level == "data": 
+            data_filtered = filter_dict(data, mask)
+            meta_filtered = remove_eids(data_filtered, meta)
 
         # event-level filtering
-        if meta_mask is not None:
-            meta_filtered = filter_dict(meta_filtered, meta_mask)
-            data_filtered = remove_eids(meta_filtered, data_filtered)
+        elif level == "meta":
+            meta_filtered = filter_dict(meta, mask)
+            data_filtered = remove_eids(meta_filtered, data)
 
         eids_after, steps_after = np.unique(data_filtered["eid_original"], return_counts=True)
-        eids_removed = np.setdiff1d(eids_before, eids_after)
 
+        eids_removed = np.setdiff1d(eids_before, eids_after)
         steps_removed = steps_before.sum() - steps_after.sum()
         events_removed = len(eids_removed)
 
+        if reindex and events_removed > 0:
+            data_filtered, meta_filtered = reindex_eid(data_filtered, meta_filtered)
 
         self.filters[filter_name]["n_steps"] = self.filters[filter_name].get("n_steps", 0) + steps_removed
         self.filters[filter_name]["n_events"] = self.filters[filter_name].get("n_events", 0) + events_removed
         self.filters[filter_name].setdefault("eids", []).extend(eids_removed.tolist())
 
-        # reindex
-        if reindex and events_removed > 0:
-            data_filtered, meta_filtered = reindex_eid(data_filtered, meta_filtered)
-
-        self.data_filtered = data_filtered
-        self.meta_filtered = meta_filtered
+        return data_filtered, meta_filtered
 
 
-    def save_data(self, stage): # save_filtered
 
-        # stage can be filtered, raw, sampled
+    def save_data(self, data, meta, stage, file_idx): 
 
         print("Saving data")
-
-        data = getattr(self, f"data_{stage}")
-        meta = getattr(self, f"meta_{stage}")
-
-        save_dir = os.path.join(self.save_dir, stage)
+        save_dir = os.path.join(self.output_dir, stage)
         os.makedirs(save_dir, exist_ok=True)
 
-        np.savez(os.path.join(save_dir, f"file{self.file_idx}_data.npz"), **data)
-        np.savez(os.path.join(save_dir, f"file{self.file_idx}_meta.npz"), **meta)
+        np.savez(os.path.join(save_dir, f"file{file_idx}_data.npz"), **data)
+        np.savez(os.path.join(save_dir, f"file{file_idx}_meta.npz"), **meta)
 
         if stage == "filtered":
-            self._write_status_file(save_dir)
+            self._write_status_file(save_dir, data, file_idx)
 
         print("Save complete")
 
 
-    def _write_status_file(self, save_dir):
+    def _write_status_file(self, save_dir, data, file_idx):
 
-        status_path = os.path.join(save_dir, f"{self.file_idx}_status.txt")
+        file_path = os.path.join(save_dir, f"file{file_idx}_status.txt")
 
-        with open(status_path, "w") as f:
+        with open(file_path, "w") as f:
 
-            f.write(f"Dataset name: {self.file_idx}\n")
+            f.write(f"Dataset name: {file_idx}\n")
             f.write("=" * 40 + "\n\n")
 
             for k in self.filters.keys():
@@ -755,7 +758,6 @@ class DataProcessor():
                 else:
                     filter_name = "_".join(k.split("_")[:-1])
                 
-            
                 f.write(f"Filter: {filter_name}\n")
                 f.write(f"  Steps removed:  {self.filters[k]['n_steps']}\n")
                 f.write(f"  Events removed: {self.filters[k]['n_events']}\n")
@@ -771,64 +773,63 @@ class DataProcessor():
 
             f.write("\nFinal dataset summary\n")
             f.write("=" * 40 + "\n")
-            f.write(f"Remaining events: {len(np.unique(self.data_filtered['eid']))}\n")
-            f.write(f"Remaining steps:  {len(self.data_filtered['eid'])}\n")   
+            f.write(f"Remaining events: {len(np.unique(data['eid']))}\n")
+            f.write(f"Remaining steps:  {len(data['eid'])}\n")   
 
 
-    def build_dataset(self, cfg, debug=False):
+    def build_dataset(self, debug=False):
 
         self.stats = {}
-        files = get_file_names(self.load_dir, stage="filtered" if debug else "raw")
+        file_names = get_file_names(self.output_dir, "filtered") if debug else get_file_names(self.input_dir, "raw")
 
-        for i in range(len(files)):
-            # load -> filter -> save -> clean -> normalize -> split -> save
+        for i in range(len(file_names)):
 
             if debug:
-                print("Load filtered data")
-                self.load_data(stage="filtered")
+                print("Load filtered data") 
+                file_idx = get_file_idx(file_names[i])       
+                data_filtered, meta_filtered = self.load_data(stage="filtered", file_idx=file_idx)
+
             else:
                 print("Load raw data")
-                self.load_raw(file_num=i)
-                self.filter_data(cfg=cfg, filters=cfg.dataset.filters, reset=True)
-                
-                if cfg.dataset.aggregate:
+                data, meta = self.load_raw(self.input_dir, file_names[i])
+                filters = self.cfg.dataset.filters
+                data_filtered, meta_filtered = self.filter_data(data, meta, filters=filters, reset=True)
+
+                # aggregate data                 
+                if self.cfg.dataset.aggregate:
                     print("Aggregating data")
-                    self.aggregate_data()
+                    data_filtered = self.aggregate_data(data_filtered, reset=False)
 
-                self.save_data()
+                # save data
+                self.save_data(data_filtered, meta_filtered, stage="filtered", file_idx=i+1)
 
-            if cfg.dataset.normalize:
+            # normalize data
+            if self.cfg.dataset.normalize:
                 print("Normalizing data")
-                normalize_data(self.data_filtered, self.meta_filtered, cfg)
+                normalize_data(data_filtered, meta_filtered, self.cfg)
 
             print("Cleaning data")
-            self.clean_data(keepvars=cfg.dataset.keepvars)
+            data_filtered = self.clean_data(data_filtered)
+            meta_filtered = self.clean_data(meta_filtered)
 
             if not self.stats:
-                self.init_stats()
+                self.init_stats(data_filtered, meta_filtered) # not very clean!?
 
             print("Splitting data")
-            self.split_data(split=cfg.dataset.split, keepvars=cfg.dataset.keepvars)
+            split_ratios = self.cfg.dataset.split_ratios
+            self.split_and_save(data_filtered, meta_filtered, split_ratios, i+1)
 
         self.save_stats()
 
 
-    def clean_data(self, keepvars):
-       
-        self.data_filtered = {
-            k: v for k, v in self.data_filtered.items() 
-            if k in keepvars or k.endswith("norm")
+    def clean_data(self, dict1):
+        return {
+            k: v for k, v in dict1.items() 
+            if k in self.cfg.dataset.keepvars or k.endswith("norm")
             }
-        
-        self.meta_filtered = {
-            k: v for k, v in self.meta_filtered.items()
-             if k in keepvars or k.endswith("norm")
-             }
 
-    def split_data(self, split=[0.8, 0.1, 0.1], keepvars=None):
 
-        data = self.data_filtered
-        meta = self.meta_filtered
+    def split_and_save(self, data, meta, split_ratios, file_idx):
 
         eids_all = meta["eid"].copy()
 
@@ -836,20 +837,20 @@ class DataProcessor():
 
         n = len(eids_all)
 
-        n_train = int(split[0] * n)
-        n_val = int(split[1] * n)
+        n_train = int(split_ratios[0] * n)
+        n_val = int(split_ratios[1] * n)
 
         eids_train = eids_all[:n_train]
         eids_val = eids_all[n_train:n_train+n_val]
         eids_test = eids_all[n_train+n_val:]
 
-        eids_split = {
+        splits = {
             "train": eids_train, 
             "val": eids_val, 
             "test": eids_test
             }
 
-        for split_name, eids in eids_split.items():
+        for split, eids in splits.items():
 
             data_mask = np.isin(data["eid"], eids)
             meta_mask = np.isin(meta["eid"], eids)
@@ -857,15 +858,26 @@ class DataProcessor():
             data_filtered = filter_dict(data, data_mask)
             meta_filtered = filter_dict(meta, meta_mask)
             
-            if split_name == "train":
+            data_filtered, meta_filtered = reindex_eid(data_filtered, meta_filtered)
 
+            if split == "train":
                 self.update_stats(data_filtered, meta_filtered)
 
-            self.save_split(data_filtered, meta_filtered, split=split_name)
+            self.save_split(data_filtered, meta_filtered, split, file_idx)
 
-    def init_stats(self):
 
-        for k in self.data_filtered | self.meta_filtered:
+    def save_split(self, data, meta, split, file_idx):
+
+        save_dir = os.path.join(self.output_dir, split)
+        os.makedirs(save_dir, exist_ok=True)
+
+        np.savez(os.path.join(save_dir, f"file{file_idx}_data.npz"), **data)
+        np.savez(os.path.join(save_dir, f"file{file_idx}_meta.npz"), **meta)
+
+
+    def init_stats(self, data, meta):
+
+        for k in data | meta:
             if k not in ["eid", "eid_original"]:
                 self.stats[k] = RunningStats()
 
@@ -873,41 +885,51 @@ class DataProcessor():
 
         # make sure no key are the same in data and meta
         for k, stat in self.stats.items():
-
             vals = data.get(k)
-
             if vals is None:
                 vals = meta.get(k)
-            
             if vals is None:
                 continue
-
             stat.update(vals)
 
     def save_stats(self):
 
         stats_out = {}
-
         for k, stat in self.stats.items():
-
             stats_out[k] = {
                 "mean": float(stat.mean),
                 "std": float(stat.std()),
                 "n": int(stat.n)
             }
 
-        save_path = os.path.join(self.save_dir, "stats.json")
+        save_path = os.path.join(self.output_dir, "stats.json")
 
         with open(save_path, "w") as f:
             json.dump(stats_out, f, indent=4)
 
-    def save_split(self, data, meta, split):
+    
+    def load_stats(self):
+        
+        try: 
+            stats = load_stats(load_dir=self.output_dir)
+            return stats
+        
+        except Exception as e:
+            return None 
+        
+    
+    def inverse_transform(self, data, meta, standardize_vars):
 
-        save_dir = os.path.join(self.save_dir, split)
-        os.makedirs(save_dir, exist_ok=True)
+        standardize_data(data, self.stats, standardize_vars, inverse=True)
+        standardize_data(meta, self.stats, standardize_vars, inverse=True)
 
-        np.savez(os.path.join(save_dir, f"file{self.file_idx}_data.npz"), **data)
-        np.savez(os.path.join(save_dir, f"file{self.file_idx}_meta.npz"), **meta)
+        normalize_data(data, meta, self.cfg, inverse=True)
+        compute_static_features(data, meta, inverse=True)
+
+        return data, meta 
+
+        
+
 
 
 class RunningStats:
