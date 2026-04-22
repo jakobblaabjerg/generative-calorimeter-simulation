@@ -114,7 +114,7 @@ data_loader_space = {
 mlp_space = {
     "model.mlp.hidden_layers": {
         "type": "categorical",
-        "values": [[64, 64], [128, 128], [256, 256], [128, 128, 128]]
+        "values": [[64, 64], [128, 128], [256, 256], [512, 512], [64, 64, 64], [128, 128, 128], [256, 256, 256]]
     },
     "model.mlp.layer_norm": {
         "type": "categorical",
