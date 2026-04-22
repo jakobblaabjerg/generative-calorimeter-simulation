@@ -7,7 +7,7 @@ from src.data_processing import DataProcessor
 
 #######################
 
-VERSION = 3
+VERSION = 8
 MODEL = "cfm"
 
 #######################

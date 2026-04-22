@@ -9,12 +9,7 @@ model:
   num_steps: 100
   aux_model_dir: logs/final/mdn/version_1
 
-  encoder:
-    name: sequence
-    max_seq_len: 10000
-    output_size: 128
-    cell_type: "lstm"
-    use_cond: True
+  encoder: null
   
   mlp:
     hidden_layers: [128, 128]

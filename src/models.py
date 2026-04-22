@@ -377,15 +377,51 @@ class PointNetEncoder(nn.Module):
         super().__init__()
         self.name = "pointnet"
 
+
+
+
+
 class DeepSetsEncoder(nn.Module):
-    def __init__(self):
+    def __init__(
+            self,
+            hidden_layers,
+            layer_norm,
+            input_size,
+            output_size,
+            activation,
+            pooling,
+            ):
+
         super().__init__()
-        self.name = "deepsets"
 
-        self.phi = MLP()
+        self.phi_net = MLP(
+            hidden_layers,
+            layer_norm,
+            input_size,
+            output_size,
+            activation,
+        )
 
-    def forward(self, z_t, t, c, num_points):
-        pass
+        self.pooling = create_pooling_fn(pooling)
+        self.output_size = output_size
+
+
+    def forward(self, z_t, num_points):
+
+        phi_output = self.phi_net(z_t)
+        splits = torch.split(phi_output, num_points.detach().cpu().tolist(), dim=0)
+
+        # pooling
+        pooled_list = []
+    
+        # change this later to avoid loop
+        for chunk in splits:
+            pooled_list.append(self.pooling(chunk))
+
+        emb = torch.stack(pooled_list)
+        return torch.repeat_interleave(emb, num_points, dim=0)
+
+
 
 class SequenceEncoder(nn.Module):
 
@@ -400,7 +436,6 @@ class SequenceEncoder(nn.Module):
         super().__init__()
 
         self.max_seq_len = max_seq_len
-        self.input_size = input_size
         self.output_size = output_size
         
         if cell_type == "lstm":
@@ -483,6 +518,21 @@ def load_checkpoint(run_dir, model, device, which="best"):
     file_path = os.path.join(run_dir, f"{which}_model.pt")
     checkpoint = torch.load(file_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
+
+
+def create_pooling_fn(pooling):
+
+    if pooling == "mean":
+        return lambda x: x.mean(dim=0)
+    elif pooling == "max":
+        return lambda x: x.max(dim=0)[0]
+    elif pooling == "sum":
+        return lambda x: x.sum(dim=0) / (x.size(0) ** 0.5)
+    else:
+        raise ValueError(f"Unknown pooling: {pooling}")
+
+
+
 
 
 
