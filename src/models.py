@@ -20,7 +20,7 @@ ACTIVATIONS = {
     "elu": nn.ELU,
     "selu": nn.SELU,
     "leaky_relu": nn.LeakyReLU,
-    "silu": nn.SiLU(),
+    "silu": nn.SiLU,
 }
 
 
