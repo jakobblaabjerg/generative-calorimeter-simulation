@@ -19,7 +19,8 @@ ACTIVATIONS = {
     "sigmoid": nn.Sigmoid,
     "elu": nn.ELU,
     "selu": nn.SELU,
-    "leaky_relu": nn.LeakyReLU
+    "leaky_relu": nn.LeakyReLU,
+    "silu": nn.SiLU(),
 }
 
 
@@ -55,8 +56,8 @@ class MixtureDensityNetwork(nn.Module):
         self.mlp = MLP(
             hidden_layers=cfg.hidden_layers, 
             layer_norm=cfg.layer_norm, 
-            input_dim=cfg.cond_dim, 
-            output_dim=1+self.k*(2*self.point_dim+1), 
+            input_size=cfg.cond_dim, 
+            output_size=1+self.k*(2*self.point_dim+1), 
             activation=cfg.activation
             )
 
@@ -136,12 +137,12 @@ class MixtureDensityNetwork(nn.Module):
 
     def sample_num_points(self, c):
 
-        out = self.net(c)
+        out = self.mlp(c)
         rate, pi, means, log_vars = self.split(out)
         rate = torch.exp(rate).squeeze(-1) 
 
         num_points = torch.distributions.Poisson(rate).sample()
-        num_points = torch.clamp(num_points, min=1)
+        num_points = torch.clamp(num_points, min=1).long()
 
         return num_points
 
@@ -206,33 +207,51 @@ class ConditionalFlowMatching(nn.Module):
 
         # input dimensions 
         self.point_dim = len(self.z_vars)
-        self.max_seq_len = cfg.max_seq_len
-        self.cond_dim = cfg.cond_dim    
-        input_size = self.point_dim + self.cond_dim + 1
-
-        hidden_size = cfg.encoder.hidden_size
-        cell_type = cfg.encoder.cell_type
-
-        hidden_layers = cfg.mlp.hidden_layers
-        layer_norm = cfg.mlp.layer_norm
-        activation = cfg.mlp.activation
+        self.cond_dim = cfg.cond_dim
         
-        # neural nets 
-        self.encoder = SeqEncoder(
-            max_seq_len=self.max_seq_len, 
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            cell_type=cell_type,
-            )
-        
+        # neural nets        
+        self.cfg_encoder = cfg.encoder
+        self.encoder = self._build_encoder(self.cfg_encoder) if self.cfg_encoder is not None else None
+        input_size_mlp = self._input_size_mlp()
+
         self.mlp = MLP(
-            hidden_layers=hidden_layers, 
-            layer_norm=layer_norm, 
-            input_dim=hidden_size, 
-            output_dim=self.point_dim,
-            activation=activation,
+            hidden_layers=cfg.mlp.hidden_layers, 
+            layer_norm=cfg.mlp.layer_norm, 
+            input_size=input_size_mlp, 
+            output_size=self.point_dim,
+            activation=cfg.mlp.activation,
             )
+
+
+    def _build_encoder(self, cfg):
+
+        self.use_cond = cfg.use_cond # t, c
+        self.encoder_name = cfg.name
+
+        input_size = self.point_dim
+        if self.use_cond:
+            input_size += self.cond_dim + 1
+
+        encoder_cls = ENCODER_REGISTRY[self.encoder_name]            
+        cfg = {k: v for k, v in vars(cfg).items() if k not in ["name", "use_cond"]}
+        encoder = encoder_cls(input_size=input_size, **cfg)
+
+        return encoder
+
+
+    def _input_size_mlp(self):
         
+        if self.encoder is None:
+            return self.point_dim + self.cond_dim + 1
+
+        if self.encoder_name in ["sequence"]:
+            return self.encoder.output_size
+
+        if self.encoder_name in ["deepsets", "pointnet"]:
+            return self.point_dim + self.cond_dim + 1 + self.encoder.output_size
+
+        raise ValueError(f"Unknown encoder: {self.encoder_name}")
+
 
     def z_t(self, z_0, z_1, t):
         return t * z_1 + (1-t) * z_0
@@ -243,29 +262,41 @@ class ConditionalFlowMatching(nn.Module):
 
 
     def v_theta(self, z_t, t, c, num_points):
-        model_input = torch.cat([z_t, t, c], dim=-1)
-        hidden = self.encoder(model_input, num_points)
-        return self.mlp(hidden)
 
-
-    def forward(self, x, z, c, num_points):
+        if self.encoder is None:
+            inputs = torch.cat([z_t, t, c], dim=-1)
+            return self.mlp(inputs)
         
+        if self.encoder_name in ["sequence"]:
+            inputs = self.encoder(z_t, t, c, num_points)
+            # later we can add conditionals again v = mlp([z_t, h])
+
+        elif self.encoder_name in ["deepsets", "pointnet"]:
+            emb = self.encoder(z_t, num_points)
+            inputs = torch.cat([z_t, t, c, emb], dim=-1)
+        else:
+            raise ValueError(self.encoder_name)
+
+        return self.mlp(inputs)
+
+
+    def forward(self, x, z, c, num_points):        
+
         device = z.device
-        batch_size, _, _ = z.size()
+        batch_size= c.size(0)
+        
+        c_repeated = torch.repeat_interleave(c, num_points, dim=0)
 
-        # sample the time steps
-        t = torch.distributions.uniform.Uniform(0, 1).sample(sample_shape=(batch_size,)).to(z.device) 
-
-        # reshape  
-        c = c.view(batch_size, 1, self.cond_dim).expand(batch_size, self.max_seq_len, self.cond_dim) 
-        t = t.view(batch_size, 1, 1).expand(batch_size, self.max_seq_len, 1) 
+        # sample the time step per batch element
+        t = torch.distributions.uniform.Uniform(0, 1).sample(sample_shape=(batch_size,)).to(z.device)
+        t = torch.repeat_interleave(t.unsqueeze(-1), num_points, dim=0)
 
         # sample z_0 from p_0
         z_0 = torch.distributions.Normal(0, 1).sample(z.shape).to(device)
 
         z_t = self.z_t(z_0, z, t)
         v_t = self.v_t(z_0, z) 
-        v_theta = v_theta(z_t, t, c, num_points)
+        v_theta = self.v_theta(z_t, t, c_repeated, num_points)
 
         loss = self.loss(v_theta, v_t, num_points)
 
@@ -273,10 +304,14 @@ class ConditionalFlowMatching(nn.Module):
 
 
     def loss(self, v_theta, v_t, num_points):
+        # computes average point loss per point cloud and takes average across batch
+        # contract: tensor is always concatenated in event order and never reordered
+        
+        err = ((v_theta - v_t)**2).sum(dim=-1)  # total loss per point 
+        err = torch.segment_reduce(err, reduce="mean", lengths=num_points)
+        
+        return torch.mean(err)
 
-        mask = self._create_mask(num_points, device=v_theta.device)
-        squared_error = (v_theta - v_t)**2
-        return squared_error[mask].mean()
 
     def _load_model_aux(self, device):
 
@@ -288,14 +323,10 @@ class ConditionalFlowMatching(nn.Module):
         load_checkpoint(self.aux_model_dir, self.aux_model, device)
 
 
-    def _create_mask(self, num_points, device):
-        return torch.arange(self.max_seq_len, device=device)[None, :] < num_points[:, None]
-
-
-
     def sample(self, c):
 
         device = c.device 
+        batch_size = c.size(0)
 
         # load aux model if it does not exist
         if self.aux_model is None:
@@ -303,30 +334,23 @@ class ConditionalFlowMatching(nn.Module):
 
         # sample from auxilary model
         num_points = self.aux_model.sample_num_points(c)
-        
+        c_repeated = torch.repeat_interleave(c, num_points, dim=0)   
+
         # sample noise
-        batch_size, _ = c.size()
-        shape = (batch_size, self.max_seq_len, self.point_dim)
+        total_points = num_points.sum().item()
+        shape = (total_points, self.point_dim)
         z_t = torch.distributions.Normal(0,1).sample(shape).to(device)
 
-        # step size    
-        delta_t = torch.tensor(1/self.num_steps, device=device)
-        
-        # reshape tensors         
-        delta_t = delta_t.view(1, 1, 1).expand(batch_size, self.max_seq_len, 1)
-        c = c.unsqueeze(1).expand(batch_size, self.max_seq_len, self.cond_dim)
+        # step size   
+        delta_t = torch.full((total_points, 1), 1/self.num_steps, device=device)
 
         # integrate 
-        for i in range(self.num_steps):
-            
+        for i in range(self.num_steps):            
             t = (i+1)*delta_t
-            v_theta = v_theta(z_t, t, c, num_points)
+            v_theta = self.v_theta(z_t, t, c_repeated, num_points)
             z_t += v_theta * delta_t
 
-        mask = self._create_mask(num_points, device)
-        z_t_masked = z_t[mask]
-
-        return self.to_flattened_representation(z_t_masked, c, num_points)  
+        return self.to_flattened_representation(z_t, c, num_points)  
 
 
     def to_flattened_representation(self, z, c, num_points):
@@ -341,39 +365,35 @@ class ConditionalFlowMatching(nn.Module):
             data[var] = z[:, j]
 
         for j, var in enumerate(self.c_vars):
-            meta[var] = c[:, 0, j]   
+            meta[var] = c[:, j]    
 
         meta["eid"] = np.arange(len(num_points))
         data["eid"] = np.repeat(meta["eid"], num_points)
 
         return data, meta
 
+class PointNetEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.name = "pointnet"
 
-# pointwise mlp (use fx flat data)
-#cross attention
-# how can graph nn be used? 
+class DeepSetsEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.name = "deepsets"
 
+        self.phi = MLP()
 
-# class SetEncoder(nn.Module):
-#     def __init__(self):
+    def forward(self, z_t, t, c, num_points):
+        pass
 
-#         it takes in the produces 
-
-#         #point net impplementation #sparse batching.
-#         # deepsets? # sparse batching.
-#         # set transformer 
-
-#         super().__init__()
-
-
-
-class SeqEncoder(nn.Module):
+class SequenceEncoder(nn.Module):
 
     def __init__(
             self,
             max_seq_len,
             input_size,
-            hidden_size,
+            output_size,
             cell_type,
             ):
         
@@ -381,22 +401,47 @@ class SeqEncoder(nn.Module):
 
         self.max_seq_len = max_seq_len
         self.input_size = input_size
-
+        self.output_size = output_size
+        
         if cell_type == "lstm":
-            self.rnn = nn.LSTM(input_size, hidden_size, batch_first=True)
+            self.rnn = nn.LSTM(input_size, output_size, batch_first=True)
         elif cell_type == "gru":
-            self.rnn = nn.GRU(input_size, hidden_size, batch_first=True)
+            self.rnn = nn.GRU(input_size, output_size, batch_first=True)
         else:
             raise ValueError(f"Unknown cell_type: {cell_type}")
 
 
-    def forward(self, model_input, num_points):
+    def _to_padded(self, tensor, num_points, batch_size):
 
-        packed = pack_padded_sequence(model_input, num_points.cpu(), batch_first=True, enforce_sorted=False)
+        tensor_padded = torch.zeros(batch_size, self.max_seq_len, tensor.size(-1), device=tensor.device)
+        splits = torch.split(tensor, num_points.tolist(), dim=0)
+    
+        for i, chunk in enumerate(splits):
+            tensor_padded[i, :chunk.size(0), :] = chunk
+    
+        return tensor_padded
+
+    def _create_mask(self, num_points, max_seq_len, device):
+        return torch.arange(max_seq_len, device=device)[None, :] < num_points[:, None]
+
+    def forward(self, z_t, t, c, num_points):
+
+        batch_size = num_points.size(0)
+  
+        z_t = self._to_padded(z_t, num_points, batch_size)
+        c = self._to_padded(c, num_points, batch_size)
+        t = self._to_padded(t, num_points, batch_size)
+
+        sequence = torch.cat([z_t, t, c], dim=-1)
+
+        packed = pack_padded_sequence(sequence, num_points.cpu(), batch_first=True, enforce_sorted=False)
         hidden_states, _ = self.rnn(packed)
         hidden_states, _ = pad_packed_sequence(hidden_states, batch_first=True, total_length=self.max_seq_len)
 
-        return hidden_states
+        # to sparse representation
+        mask = self._create_mask(num_points, self.max_seq_len, z_t.device)
+
+        return hidden_states[mask]
 
 
 class MLP(nn.Module):
@@ -404,8 +449,8 @@ class MLP(nn.Module):
             self,
             hidden_layers,
             layer_norm,
-            input_dim,
-            output_dim,
+            input_size,
+            output_size,
             activation,
             ):
         super().__init__()
@@ -413,7 +458,7 @@ class MLP(nn.Module):
         layers = []
         activation = ACTIVATIONS[activation]
         
-        in_features = input_dim
+        in_features = input_size
 
         for hidden in hidden_layers: 
             layers.append(nn.Linear(in_features, hidden))
@@ -424,14 +469,13 @@ class MLP(nn.Module):
             layers.append(activation()) 
             in_features = hidden
 
-        layers.append(nn.Linear(in_features, output_dim))
+        layers.append(nn.Linear(in_features, output_size))
 
         self.net = nn.Sequential(*layers)
 
 
-    def forward(self, model_input):
-
-        return self.net(model_input)
+    def forward(self, inputs):
+        return self.net(inputs)
 
 
 def load_checkpoint(run_dir, model, device, which="best"):
@@ -439,6 +483,51 @@ def load_checkpoint(run_dir, model, device, which="best"):
     file_path = os.path.join(run_dir, f"{which}_model.pt")
     checkpoint = torch.load(file_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
+
+
+
+# class PointBatch:
+
+#     def __init__(self):
+#         # .to_padded()
+#         # .to_sparse()
+#         # .mask
+#         # .lengths
+
+
+
+# stochastic point subsampling
+
+# Instead of using all points, you sample a subset:
+
+
+#point net impplementation #sparse batching.
+# deepsets? # sparse batching.
+# set transformer 
+
+
+
+
+
+# pointwise mlp (use fx flat data)
+#cross attention
+# how can graph nn be used? 
+
+
+# set-based model: Deep Sets or Set Transformer
+# Autoregressive / chunked MDN: Generate points in chunks of 500–1000
+
+
+# This is a matching problem.
+
+# Solutions used in research:
+
+# Optimal transport
+# Hungarian matching
+# random pairing
+# coupling distributions
+
+
 
 
 
@@ -520,4 +609,10 @@ def load_checkpoint(run_dir, model, device, which="best"):
 MODEL_REGISTRY = {
     "mdn": MixtureDensityNetwork,
     "cfm": ConditionalFlowMatching,
+}
+
+ENCODER_REGISTRY = {
+    "pointnet": PointNetEncoder,
+    "deepsets": DeepSetsEncoder,
+    "sequence": SequenceEncoder,
 }

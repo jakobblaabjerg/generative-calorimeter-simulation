@@ -1,5 +1,5 @@
 from src.evaluator import Evaluator
-from src.models import MixtureDensityNetwork
+from src.models import MODEL_REGISTRY
 from src.config import load_config, sample_config
 from train import run_train
 import pandas as pd
@@ -8,6 +8,7 @@ import pandas as pd
 def run_sweep(cfg_base, search_space, n_trials):
     
     leaderboard = []
+    model_name = cfg_base.name
 
     for _ in range(n_trials):
         
@@ -15,7 +16,7 @@ def run_sweep(cfg_base, search_space, n_trials):
             cfg_version, params = sample_config(cfg_base, search_space)
             run_train(cfg_version)
 
-            evaluator = Evaluator(model_cls=MixtureDensityNetwork, cfg=cfg_version)
+            evaluator = Evaluator(model_cls=MODEL_REGISTRY[model_name], cfg=cfg_version)
             loss = evaluator.evaluate(split="val")
             num_params = evaluator.num_params()
             version = evaluator.version()
@@ -29,7 +30,7 @@ def run_sweep(cfg_base, search_space, n_trials):
             })
 
             df = pd.DataFrame(leaderboard)
-            df = df.sort_values("acc", ascending=True)
+            df = df.sort_values("loss", ascending=True)
             df.to_csv(f"{cfg_version.logger.log_dir}/leaderboard.csv", index=False)
 
         except Exception as e:
@@ -68,7 +69,6 @@ search_space_mdn = {
         "min": 2,
         "max": 6
     },
-
     "model.add_jacobian": {
         "type": "categorical",
         "values": [True, False]
@@ -77,7 +77,7 @@ search_space_mdn = {
 }
 
 
-search_space_cfm = {
+optim_space = {
     "optimizer.type": {
         "type": "categorical",
         "values": ["adam", "adamw"]
@@ -87,10 +87,16 @@ search_space_cfm = {
         "min": 1e-5,
         "max": 1e-2
     },
+}
+
+data_loader_space = {
     "data_loader.batch_size": {
         "type": "categorical",
-        "values": [64, 128, 256]
+        "values": [64, 128]
     },
+}
+
+mlp_space = {
     "model.mlp.hidden_layers": {
         "type": "categorical",
         "values": [[64, 64], [128, 128], [256, 256], [128, 128, 128]]
@@ -103,25 +109,30 @@ search_space_cfm = {
         "type": "categorical",
         "values": ["relu","gelu", "silu", "selu", "leaky_relu"]
     },
+}
 
-    "model.encoder.hidden_size": {
+encoder_space = {
+    "model.encoder.output_size": {
         "type": "categorical",
-        "values": [64, 128]
+        "values": [64, 128, 256]
     },
-
     "model.encoder.cell_type": {
         "type": "categorical",
         "values": ["gru", "lstm"]
     }
-
 }
-
-
 
 
 if __name__ == "__main__":
 
     MODEL = "cfm"
+
+    search_space = [
+        optim_space,
+        data_loader_space,
+        mlp_space,
+        encoder_space
+    ]
+
     cfg_base = load_config(f"configs/base_{MODEL}.yaml")
-    cfg_base.logger.log_dir = "logs/sweep_cfm"
     run_sweep(cfg_base, search_space, n_trials=100)

@@ -131,11 +131,10 @@ def collate_sparse(batch):
 
     x_list, z_list, c_list = zip(*batch)
 
+    num_points = torch.tensor([x.size(0) for x in x_list], dtype=torch.long)
+
     x = torch.cat(x_list, dim=0)
     z = torch.cat(z_list, dim=0)
-
-    num_points = [x.size(0) for x in x_list]
-    num_points = torch.tensor(num_points, dtype=torch.long)
     c = torch.stack(c_list)
 
     return x, z, c, num_points

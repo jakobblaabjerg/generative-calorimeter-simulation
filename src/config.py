@@ -42,6 +42,15 @@ def set_nested(cfg, key, value):
 
 def sample_config(cfg_base, search_space):
 
+    if isinstance(search_space, list):
+        merged = {}
+        for space in search_space:
+            overlap = merged.keys() & space.keys()
+            if overlap:
+                raise ValueError(f"Duplicate keys in search space: {overlap}")
+            merged.update(space)
+        search_space = merged
+
     cfg_version = copy.deepcopy(cfg_base)
 
     params = {k: sample_param(v) for k, v in search_space.items()}

@@ -1,9 +1,11 @@
 from src.config import load_config, save_config
 from src.logger import Logger
-from src.datasets import get_data_loader, get_collate_fn
+from src.datasets import get_data_loader
 from src.models import MODEL_REGISTRY
 from src.optimizers import create_optimizer
 from src.trainer import Trainer
+
+import argparse
 
 def run_train(cfg):
 
@@ -29,5 +31,9 @@ def run_train(cfg):
 
 if __name__ == "__main__":
 
-    cfg_base = load_config("configs/base_mdn.yaml")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, required=True)
+    args = parser.parse_args()
+
+    cfg_base = load_config(f"configs/base_{args.model}.yaml")
     run_train(cfg_base)

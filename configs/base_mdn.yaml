@@ -15,7 +15,7 @@ model:
 
 trainer:
   epochs: 50
-  patience: 50
+  patience: 5
 
 optimizer: 
   type: adam

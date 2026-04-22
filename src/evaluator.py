@@ -9,9 +9,9 @@ class Evaluator:
     def __init__(self, model_cls, cfg):
 
         self.cfg = cfg
-        self.model = model_cls(**vars(self.cfg.model))
+        self.model = model_cls(self.cfg.model)
 
-        self.device = torch.device(self.cfg.sampler.device)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # change this!
         self.model.to(self.device)
         load_checkpoint(self.cfg.run_dir, self.model, self.device)
         self.model.eval()
