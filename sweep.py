@@ -186,6 +186,12 @@ encoder_space = {
             "values": [True, False]
         },
 
+
+        "model.encoder.activation": {
+            "type": "categorical",
+            "values": ["relu","gelu", "silu", "selu", "leaky_relu"]
+        },
+
     },
     
 }

@@ -3,6 +3,8 @@ import logging
 
 def setup_logger(name, save_dir):
 
+    os.makedirs(save_dir, exist_ok=True)
+
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     file_path = os.path.join(save_dir, f"{name}.log")
