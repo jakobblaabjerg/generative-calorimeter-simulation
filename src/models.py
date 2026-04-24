@@ -240,6 +240,8 @@ class ConditionalFlowMatching(nn.Module):
 
 
     def _input_size_mlp(self):
+
+        # maybe change this 
         
         if self.encoder is None:
             return self.point_dim + self.cond_dim + 1
@@ -262,22 +264,16 @@ class ConditionalFlowMatching(nn.Module):
 
 
     def v_theta(self, z_t, t, c, num_points):
-
+        
         if self.encoder is None:
             inputs = torch.cat([z_t, t, c], dim=-1)
-            return self.mlp(inputs)
-        
-        if self.encoder_name in ["sequence"]:
-            inputs = self.encoder(z_t, t, c, num_points)
-            # later we can add conditionals again v = mlp([z_t, h])
+            reg_loss = torch.tensor(0.0, device=z_t.device)
 
-        elif self.encoder_name in ["deepsets", "pointnet"]:
-            emb = self.encoder(z_t, num_points)
-            inputs = torch.cat([z_t, t, c, emb], dim=-1)
         else:
-            raise ValueError(self.encoder_name)
+            inputs, reg_loss = self.encoder(z_t, t, c, num_points)
 
-        return self.mlp(inputs)
+        return self.mlp(inputs), reg_loss
+
 
 
     def forward(self, x, z, c, num_points):        
@@ -296,11 +292,11 @@ class ConditionalFlowMatching(nn.Module):
 
         z_t = self.z_t(z_0, z, t)
         v_t = self.v_t(z_0, z) 
-        v_theta = self.v_theta(z_t, t, c_repeated, num_points)
+        v_theta, reg_loss = self.v_theta(z_t, t, c_repeated, num_points)
 
         loss = self.loss(v_theta, v_t, num_points)
 
-        return loss
+        return loss + reg_loss
 
 
     def loss(self, v_theta, v_t, num_points):
@@ -326,7 +322,6 @@ class ConditionalFlowMatching(nn.Module):
     def sample(self, c):
 
         device = c.device 
-        batch_size = c.size(0)
 
         # load aux model if it does not exist
         if self.aux_model is None:
@@ -347,7 +342,7 @@ class ConditionalFlowMatching(nn.Module):
         # integrate 
         for i in range(self.num_steps):            
             t = (i+1)*delta_t
-            v_theta = self.v_theta(z_t, t, c_repeated, num_points)
+            v_theta, _ = self.v_theta(z_t, t, c_repeated, num_points)
             z_t += v_theta * delta_t
 
         return self.to_flattened_representation(z_t, c, num_points)  
@@ -372,10 +367,149 @@ class ConditionalFlowMatching(nn.Module):
 
         return data, meta
 
+class TNet(nn.Module):
+    
+    def __init__(
+            self,
+            input_size,
+            output_size,
+            mlp1_layers,
+            mlp2_layers,
+            activation,
+            pooling,
+            batch_norm,
+            ):
+        
+        super().__init__()
+
+        self.mlp1 = MLP(
+            hidden_layers=mlp1_layers[:-1],
+            batch_norm=batch_norm,
+            input_size=input_size,
+            output_size=mlp1_layers[-1],
+            activation=activation,
+        )
+
+        self.mlp2 = MLP(
+            hidden_layers=mlp2_layers,
+            batch_norm=batch_norm,
+            input_size=mlp1_layers[-1],
+            output_size=output_size,
+            activation=activation,
+        )
+
+        assert input_size**2 == output_size
+
+        self.input_size = input_size
+        self.pooling = Pooling(method=pooling)
+
+        # initialize last layer
+        self.mlp2.last.weight.data.zero_()
+        identity = torch.eye(input_size)
+        self.mlp2.last.bias.data.copy_(identity.view(-1))
+
+    def forward(self, inputs, sizes):
+
+        batch_size = sizes.size(0)
+        mlp1_output = self.mlp1(inputs)
+        splits = torch.split(mlp1_output, sizes.tolist(), dim=0)
+        pooled = torch.stack([self.pooling(s) for s in splits])
+        mlp2_output = self.mlp2(pooled)
+        T = mlp2_output.view(batch_size, self.input_size, self.input_size)
+
+        T_repeated= torch.repeat_interleave(T, sizes, dim=0)
+        input_transformed = torch.bmm(T_repeated, inputs.unsqueeze(-1)).squeeze(-1) 
+
+        return input_transformed, T
+
+   
 class PointNetEncoder(nn.Module):
-    def __init__(self):
+    
+    def __init__(
+            self,
+            input_size,
+            activation,
+            pooling,
+            batch_norm,
+            mlp1_layers,
+            mlp2_layers,
+            tnet_layers,
+            lambda_reg,
+            dropout_rate
+            ):
+
         super().__init__()
         self.name = "pointnet"
+        self.lambda_reg = lambda_reg
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.output_size = mlp2_layers[-1]
+
+        self.input_transform = TNet(
+            input_size=input_size,
+            output_size=input_size*input_size,
+            mlp1_layers=tnet_layers[0],
+            mlp2_layers=tnet_layers[1],
+            activation=activation,
+            pooling=pooling,
+            batch_norm=batch_norm
+        )
+
+        self.mlp1 = MLP(
+            hidden_layers=mlp1_layers[:-1],
+            input_size=input_size,
+            activation=activation,
+            output_size=mlp1_layers[-1],
+            batch_norm=batch_norm
+        )
+
+        self.feature_transform = TNet(
+            input_size=mlp1_layers[-1],
+            output_size=mlp1_layers[-1]*mlp1_layers[-1],
+            mlp1_layers=tnet_layers[0],
+            mlp2_layers=tnet_layers[1],
+            activation=activation,
+            pooling=pooling,
+            batch_norm=batch_norm
+        )
+
+        self.mlp2 = MLP(
+            hidden_layers=mlp2_layers[:-1],
+            input_size=mlp1_layers[-1], 
+            activation=activation,
+            output_size=mlp2_layers[-1],
+            batch_norm=batch_norm
+        )
+
+        self.pooling = Pooling(method=pooling)
+
+
+    def forward(self, z_t, t, c, num_points):
+
+        input_transformed, T_input = self.input_transform(z_t, num_points)
+        mlp1_output = self.mlp1(input_transformed)
+
+        feature_transformed, T_feature = self.feature_transform(mlp1_output, num_points)
+        mlp2_output = self.mlp2(feature_transformed)
+
+        reg_loss = self.lambda_reg * (self.tnet_reg_loss(T_input) + self.tnet_reg_loss(T_feature))
+
+        # pooling
+        splits = torch.split(mlp2_output, num_points.tolist(), dim=0)
+        pooled = torch.stack([self.pooling(s) for s in splits]) 
+        
+        # dropout
+        pooled = self.dropout(pooled)
+        
+        # global feature
+        emb = torch.repeat_interleave(pooled, num_points, dim=0)
+
+        return torch.cat([z_t, t, c, emb], dim=-1), reg_loss
+
+
+    def tnet_reg_loss(self, T):
+        I = torch.eye(T.size(1), device=T.device).unsqueeze(0)
+        loss = torch.norm(torch.bmm(T, T.transpose(1, 2)) - I, dim=(1,2))
+        return loss.mean()
 
 
 
@@ -402,25 +536,17 @@ class DeepSetsEncoder(nn.Module):
             activation,
         )
 
-        self.pooling = create_pooling_fn(pooling)
+        self.pooling = Pooling(method=pooling)
         self.output_size = output_size
 
-
-    def forward(self, z_t, num_points):
-
+    def forward(self, z_t, t, c, num_points):
         phi_output = self.phi_net(z_t)
-        splits = torch.split(phi_output, num_points.detach().cpu().tolist(), dim=0)
+        splits = torch.split(phi_output, num_points.tolist(), dim=0)
+        pooled = torch.stack([self.pooling(s) for s in splits]) 
 
-        # pooling
-        pooled_list = []
-    
-        # change this later to avoid loop
-        for chunk in splits:
-            pooled_list.append(self.pooling(chunk))
-
-        emb = torch.stack(pooled_list)
-        return torch.repeat_interleave(emb, num_points, dim=0)
-
+        emb = torch.repeat_interleave(pooled, num_points, dim=0)
+        
+        return torch.cat([z_t, t, c, emb], dim=-1), torch.tensor(0.0, device=z_t.device)
 
 
 class SequenceEncoder(nn.Module):
@@ -476,17 +602,19 @@ class SequenceEncoder(nn.Module):
         # to sparse representation
         mask = self._create_mask(num_points, self.max_seq_len, z_t.device)
 
-        return hidden_states[mask]
+        # later we can add conditionals again v = mlp([z_t, h])
+        return hidden_states[mask], torch.tensor(0.0, device=z_t.device)
 
 
 class MLP(nn.Module):
     def __init__(
             self,
             hidden_layers,
-            layer_norm,
             input_size,
-            output_size,
             activation,
+            output_size=None,
+            layer_norm=False,
+            batch_norm=False,
             ):
         super().__init__()
 
@@ -496,17 +624,24 @@ class MLP(nn.Module):
         in_features = input_size
 
         for hidden in hidden_layers: 
-            layers.append(nn.Linear(in_features, hidden))
+            linear = nn.Linear(in_features, hidden)
+            layers.append(linear)
 
             if layer_norm:
                 layers.append(nn.LayerNorm(hidden))
 
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(hidden))
+
             layers.append(activation()) 
             in_features = hidden
 
-        layers.append(nn.Linear(in_features, output_size))
+        if output_size is not None:
+            linear = nn.Linear(in_features, output_size)
+            layers.append(linear)
 
         self.net = nn.Sequential(*layers)
+        self.last = linear
 
 
     def forward(self, inputs):
@@ -520,16 +655,22 @@ def load_checkpoint(run_dir, model, device, which="best"):
     model.load_state_dict(checkpoint["model_state_dict"])
 
 
-def create_pooling_fn(pooling):
+class Pooling(nn.Module):
+    def __init__(self, method):
+        super().__init__()
 
-    if pooling == "mean":
-        return lambda x: x.mean(dim=0)
-    elif pooling == "max":
-        return lambda x: x.max(dim=0)[0]
-    elif pooling == "sum":
-        return lambda x: x.sum(dim=0) / (x.size(0) ** 0.5)
-    else:
-        raise ValueError(f"Unknown pooling: {pooling}")
+        if method == "mean":
+            self.fn = lambda x: x.mean(dim=0)
+        elif method == "max":
+            self.fn = lambda x: x.max(dim=0)[0]
+        elif method == "sum":
+            self.fn = lambda x: x.sum(dim=0) / (x.size(0) ** 0.5)
+        else:
+            raise ValueError(f"Unknown pooling: {method}")
+    
+    def forward(self, inputs):
+        return self.fn(inputs)
+
 
 
 

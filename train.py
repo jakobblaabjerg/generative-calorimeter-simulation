@@ -22,6 +22,12 @@ def run_train(cfg):
 
     print("Initializing model")
     model = MODEL_REGISTRY[cfg.name](cfg.model)
+
+    for name, module in model.named_children():
+        n_params = sum(p.numel() for p in module.parameters())
+        print(f"{name}: {n_params} parameters")
+
+
     optimizer = create_optimizer(model, cfg.optimizer)
 
     print("Starting training")
@@ -31,9 +37,13 @@ def run_train(cfg):
 
 if __name__ == "__main__":
 
+    # fix to add encoder 
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
     args = parser.parse_args()
 
     cfg_base = load_config(f"configs/base_{args.model}.yaml")
     run_train(cfg_base)
+
+

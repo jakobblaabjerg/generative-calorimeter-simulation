@@ -139,7 +139,7 @@ encoder_space = {
         },
     },
 
-    "pointnet": {
+    "deepsets": {
         "model.encoder.hidden_layers": {
             "type": "categorical",
             "values": [[64, 64], [128, 128], [256, 256], [128, 128, 128]]
@@ -160,18 +160,40 @@ encoder_space = {
 
         "model.encoder.pooling": {
             "type": "categorical",
-            "values": ["mean", "max", "sum"]
+            "values": ["mean", "max"]
         }
     },
 
-    "deepsets": {},
+    "pointnet": {
+
+        "model.encoder.pooling": {
+            "type": "categorical",
+            "values": ["mean", "max"]
+        },
+
+        "model.encoder.dropout_rate": {
+            "type": "categorical",
+            "values": [0, 0.3]
+        },
+
+        "model.encoder.mlp2_layers": {
+            "type": "categorical",
+            "values": [[64, 128, 1024], [64, 128, 512], [64, 128, 256]]
+        },
+
+        "model.encoder.batch_norm": {
+            "type": "categorical",
+            "values": [True, False]
+        },
+
+    },
     
 }
 
 if __name__ == "__main__":
 
     MODEL = "cfm"
-    ENCODER = "deepsets"
+    ENCODER = "pointnet"
 
     cfg_base = load_config(f"configs/base_{MODEL}.yaml")
 
@@ -179,6 +201,8 @@ if __name__ == "__main__":
         cfg_encoder = load_config(f"configs/{ENCODER}_encoder.yaml")
         cfg_base.model.encoder = cfg_encoder
 
+    print(cfg_base.model.encoder.tnet_layers)
+    
     search_space = [
         optim_space,
         data_loader_space,

@@ -1,2 +1,10 @@
 name: pointnet
 use_cond: False
+activation: relu
+pooling: max
+batch_norm: True
+mlp1_layers: [64, 64]
+mlp2_layers: [64, 128, 1024]
+tnet_layers: [[64, 128, 1024], [512, 256]]
+lambda_reg: 0.001
+dropout_rate: 0.3
