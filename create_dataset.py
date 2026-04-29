@@ -10,7 +10,7 @@ def main():
     args = parser.parse_args()
 
     processor = DataProcessor(
-        config_file=args.config_file,
+        cfg=args.config_file,
         output_dir=args.output_dir,
         input_dir=args.input_dir
     )
