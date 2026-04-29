@@ -1,5 +1,6 @@
 import argparse
 from src.data_processing import DataProcessor
+from src.config import load_config
 
 def main():
 
@@ -9,8 +10,10 @@ def main():
     parser.add_argument("--config_file", type=str, default="configs/filters.yaml")
     args = parser.parse_args()
 
+    cfg = load_config(args.config_file)
+
     processor = DataProcessor(
-        cfg=args.config_file,
+        cfg=cfg,
         output_dir=args.output_dir,
         input_dir=args.input_dir
     )
