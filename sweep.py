@@ -30,7 +30,8 @@ def run_sweep(cfg_base, search_space, num_trials, num_samples, debug=False):
 
         metrics = run_eval(cfg_version, split="val", num_samples=num_samples, seed=0) # rembember seed here !?
         version = get_version(cfg_version.run_dir)
-        logger.info(f"Finished version {version} | loss={metrics["loss_mean"]:.5f}")
+        loss = metrics["loss_mean"]
+        logger.info(f"Finished version {version} | loss={loss:.5f}")
 
         leaderboard.append(make_leaderboard_entry(version, metrics, params))
         save_leaderboard(leaderboard, log_dir)
