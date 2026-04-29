@@ -1,6 +1,10 @@
-import os, yaml, copy, random
+import os, yaml, copy, random, json
 from types import SimpleNamespace 
 import numpy as np 
+
+
+
+
 
 def load_config(file_path):
 
@@ -79,3 +83,35 @@ def sample_param(spec):
     
     else:
         raise ValueError(f"Unknown sampling type: {param_type}")
+    
+
+
+def get_search_space(load_dir, model, encoder, selected_space):
+
+    # load full search space
+    file_path = os.path.join(load_dir, "search_space.json")
+    with open(file_path, "r") as f:
+        search_space_full = json.load(f)
+
+    if selected_space is None:
+        
+        if model == "cfm":
+            selected_space = ["optim", "data_loader", "mlp"]
+            
+            if encoder is not None:
+                selected_space.append("encoder")
+        
+        elif model == "mdn":
+            selected_space = ["optim", "data_loader", "mlp", "mixture"] 
+    
+    else:
+        selected_space = [s.strip() for s in selected_space.split(",")]
+
+    search_space = []
+    for k in selected_space:
+        if k == "encoder" and encoder is not None:
+            search_space.append(search_space_full[k][encoder])
+        else:
+            search_space.append(search_space_full[k])
+
+    return search_space

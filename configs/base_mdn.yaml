@@ -6,12 +6,14 @@ model:
   spherical: &SPHERICAL False
   k: 6
   alpha: 10000
-  hidden_layers: [128, 128, 128]
-  layer_norm: True
-  activation: sigmoid
   transforms: &TRANSFORMS 
     e: "log"
     z_hat: "sqrt"
+  mlp:
+    hidden_layers: [128, 128, 128]
+    layer_norm: True
+    activation: sigmoid
+
 
 trainer:
   epochs: 50
@@ -22,7 +24,7 @@ optimizer:
   lr: 0.000019248016321617105
 
 logger:
-  log_dir: "logs/final/mdn"
+  log_dir: "logs/mdn"
 
 data_loader:
   load_dir: "data/test6"

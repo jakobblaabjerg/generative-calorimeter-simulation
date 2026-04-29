@@ -1,0 +1,222 @@
+{
+    "mixture": {
+        "model.k": {
+            "type": "int",
+            "min": 2,
+            "max": 6
+        },
+        "model.add_jacobian": {
+            "type": "categorical",
+            "values": [
+                true,
+                false
+            ]
+        }
+    },
+    "optim": {
+        "optimizer.type": {
+            "type": "categorical",
+            "values": [
+                "adam",
+                "adamw"
+            ]
+        },
+        "optimizer.lr": {
+            "type": "log_uniform",
+            "min": 1e-05,
+            "max": 0.01
+        }
+    },
+    "data_loader": {
+        "data_loader.batch_size": {
+            "type": "categorical",
+            "values": [
+                64,
+                128
+            ]
+        }
+    },
+    "mlp": {
+        "model.mlp.hidden_layers": {
+            "type": "categorical",
+            "values": [
+                [
+                    64,
+                    64
+                ],
+                [
+                    128,
+                    128
+                ],
+                [
+                    256,
+                    256
+                ],
+                [
+                    512,
+                    512
+                ],
+                [
+                    64,
+                    64,
+                    64
+                ],
+                [
+                    128,
+                    128,
+                    128
+                ],
+                [
+                    256,
+                    256,
+                    256
+                ]
+            ]
+        },
+        "model.mlp.layer_norm": {
+            "type": "categorical",
+            "values": [
+                true,
+                false
+            ]
+        },
+        "model.mlp.activation": {
+            "type": "categorical",
+            "values": [
+                "relu",
+                "gelu",
+                "silu",
+                "selu",
+                "leaky_relu"
+            ]
+        }
+    },
+    "encoder": {
+        "sequence": {
+            "model.encoder.output_size": {
+                "type": "categorical",
+                "values": [
+                    64,
+                    128,
+                    256
+                ]
+            },
+            "model.encoder.cell_type": {
+                "type": "categorical",
+                "values": [
+                    "gru",
+                    "lstm"
+                ]
+            }
+        },
+        "deepsets": {
+            "model.encoder.hidden_layers": {
+                "type": "categorical",
+                "values": [
+                    [
+                        64,
+                        64
+                    ],
+                    [
+                        128,
+                        128
+                    ],
+                    [
+                        256,
+                        256
+                    ],
+                    [
+                        128,
+                        128,
+                        128
+                    ]
+                ]
+            },
+            "model.encoder.layer_norm": {
+                "type": "categorical",
+                "values": [
+                    true,
+                    false
+                ]
+            },
+            "model.encoder.activation": {
+                "type": "categorical",
+                "values": [
+                    "relu",
+                    "gelu",
+                    "silu",
+                    "selu",
+                    "leaky_relu"
+                ]
+            },
+            "model.encoder.output_size": {
+                "type": "categorical",
+                "values": [
+                    64,
+                    128,
+                    256
+                ]
+            },
+            "model.encoder.pooling": {
+                "type": "categorical",
+                "values": [
+                    "mean",
+                    "max"
+                ]
+            }
+        },
+        "pointnet": {
+            "model.encoder.pooling": {
+                "type": "categorical",
+                "values": [
+                    "mean",
+                    "max"
+                ]
+            },
+            "model.encoder.dropout_rate": {
+                "type": "categorical",
+                "values": [
+                    0,
+                    0.3
+                ]
+            },
+            "model.encoder.mlp2_layers": {
+                "type": "categorical",
+                "values": [
+                    [
+                        64,
+                        128,
+                        1024
+                    ],
+                    [
+                        64,
+                        128,
+                        512
+                    ],
+                    [
+                        64,
+                        128,
+                        256
+                    ]
+                ]
+            },
+            "model.encoder.batch_norm": {
+                "type": "categorical",
+                "values": [
+                    true,
+                    false
+                ]
+            },
+            "model.encoder.activation": {
+                "type": "categorical",
+                "values": [
+                    "relu",
+                    "gelu",
+                    "silu",
+                    "selu",
+                    "leaky_relu"
+                ]
+            }
+        }
+    }
+}

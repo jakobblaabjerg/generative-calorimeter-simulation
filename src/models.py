@@ -284,18 +284,19 @@ class ConditionalFlowMatching(nn.Module):
         c_repeated = torch.repeat_interleave(c, num_points, dim=0)
 
         # sample the time step per batch element
-        t = torch.distributions.uniform.Uniform(0, 1).sample(sample_shape=(batch_size,)).to(z.device)
+        t = torch.rand(batch_size, device=device)
         t = torch.repeat_interleave(t.unsqueeze(-1), num_points, dim=0)
 
         # sample z_0 from p_0
-        z_0 = torch.distributions.Normal(0, 1).sample(z.shape).to(device)
+        z_0 = torch.randn_like(z)
 
         z_t = self.z_t(z_0, z, t)
         v_t = self.v_t(z_0, z) 
         v_theta, reg_loss = self.v_theta(z_t, t, c_repeated, num_points)
 
         loss = self.loss(v_theta, v_t, num_points)
-
+        
+        # can return seperately to track
         return loss + reg_loss
 
 
@@ -315,7 +316,7 @@ class ConditionalFlowMatching(nn.Module):
         cfg_aux_model = load_config(f"{self.aux_model_dir}/config.yaml")
 
         # load auxillary model
-        self.aux_model = MixtureDensityNetwork(cfg_aux_model.model).to(device)
+        self.aux_model = MixtureDensityNetwork(cfg_aux_model.model)
         load_checkpoint(self.aux_model_dir, self.aux_model, device)
 
 
@@ -529,11 +530,11 @@ class DeepSetsEncoder(nn.Module):
         super().__init__()
 
         self.phi_net = MLP(
-            hidden_layers,
-            layer_norm,
-            input_size,
-            output_size,
-            activation,
+            hidden_layers=hidden_layers,
+            layer_norm=layer_norm,
+            input_size=input_size,
+            output_size=output_size,
+            activation=activation,
         )
 
         self.pooling = Pooling(method=pooling)
@@ -641,7 +642,7 @@ class MLP(nn.Module):
             layers.append(linear)
 
         self.net = nn.Sequential(*layers)
-        self.last = linear
+        # self.last = linear # where is this used? 
 
 
     def forward(self, inputs):
@@ -653,6 +654,7 @@ def load_checkpoint(run_dir, model, device, which="best"):
     file_path = os.path.join(run_dir, f"{which}_model.pt")
     checkpoint = torch.load(file_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device)
 
 
 class Pooling(nn.Module):

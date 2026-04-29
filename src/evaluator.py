@@ -4,6 +4,9 @@ from src.models import load_checkpoint
 import torch
 from tqdm import tqdm
 
+
+# combine into the 
+
 class Evaluator:
 
     def __init__(self, model_cls, cfg):
@@ -13,18 +16,28 @@ class Evaluator:
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # change this!
         self.model.to(self.device)
+        
         load_checkpoint(self.cfg.run_dir, self.model, self.device)
         self.model.eval()
 
 
     def evaluate(self, split):
 
+        torch.manual_seed(0)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(0)
+
         data_loader = get_data_loader(split=split, **vars(self.cfg.data_loader))
 
         loop = tqdm(data_loader, leave=False)
 
+        total_losses = None
+        num_batches = 0
+
         with torch.no_grad():
             for batch_idx, batch in enumerate(loop):
+
+                num_batches += 1 
 
                 batch = tuple(t.to(self.device) if torch.is_tensor(t) else t for t in batch)
                 loss = self.model(*batch)
@@ -32,16 +45,15 @@ class Evaluator:
                 if not isinstance(loss, (tuple, list)):
                     loss = (loss,)
 
-                if batch_idx == 0:
-                    loss_list = [[] for _ in range(len(loss))]
+                if total_losses is None:
+                    total_losses = [0.0 for _ in range(len(loss))]
 
                 for i, l in enumerate(loss):
-                    loss_list[i].append(l.item())
+                    total_losses[i] += l.item()
 
-                loss_total = sum(loss)
-                loop.set_postfix(loss=loss_total.item())
+                loop.set_postfix(loss=sum(l.item() for l in loss))
 
-        loss_components = [sum(l)/len(l) for l in loss_list]        
+        loss_components = [l/num_batches for l in total_losses]        
         return sum(loss_components)
 
 
