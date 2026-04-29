@@ -98,13 +98,22 @@ def load_split(split, load_dir, num_files):
 
     files = get_file_names(load_dir, split)
 
+    offset = 0 
+
     for i in range(num_files):
 
         file_name = "_".join(files[i].split("_")[:-1])
         data, meta = load_split_file(split, load_dir, file_name)
 
+        data["eid"] += offset
+        meta["eid"] += offset
+
+        offset = meta["eid"].max()+1
+
         append_to_dict(data, data_combined)
         append_to_dict(meta, meta_combined)
+
+    assert len(np.unique(meta["eid"])) == len(meta["eid"])
         
     data_combined = {k: np.concatenate(v) for k, v in data_combined.items()}
     meta_combined = {k: np.concatenate(v) for k, v in meta_combined.items()}
