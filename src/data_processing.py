@@ -543,6 +543,7 @@ class DataProcessor():
         load_dir: directory to load raw files from 
         file_num: file idx of file to use 
         """               
+        print(file_name)
         data, meta = load_h5py_file(load_dir, file_name)
         compute_static_features(data, meta)
 
