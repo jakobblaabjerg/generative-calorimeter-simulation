@@ -642,7 +642,7 @@ class MLP(nn.Module):
             layers.append(linear)
 
         self.net = nn.Sequential(*layers)
-        # self.last = linear # where is this used? 
+        self.last = linear  
 
 
     def forward(self, inputs):
