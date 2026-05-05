@@ -115,3 +115,16 @@ def get_search_space(load_dir, model, encoder, selected_space):
             search_space.append(search_space_full[k])
 
     return search_space
+
+
+def override_config(cfg, overrides):
+
+    for k, v in overrides.items():
+        if v is not None:
+            parts = k.split(".")
+            obj = cfg
+            for p in parts[:-1]:
+                if not hasattr(obj, p):
+                    raise AttributeError(f"{p} not found in config")
+                obj = getattr(obj, p)
+            setattr(obj, parts[-1], v)

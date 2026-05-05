@@ -1,12 +1,21 @@
 import torch
 import os 
+import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from contextlib import nullcontext
 
 from src.models import MODEL_REGISTRY, load_checkpoint
 from src.datasets import get_data_loader
+from src.logger import Logger
+from src.optimizers import create_optimizer
+from src.config import save_config, sample_config
+from src.logger import setup_logger
 
+
+# TO DO:
+# retraining from checkpoint
+# training schedule
 
 class Trainer:
 
@@ -175,6 +184,32 @@ def set_seed(seed=0):
         torch.cuda.manual_seed_all(seed)
 
 
+def get_num_params(model, trainable_only=False):
+    if trainable_only:
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return sum(p.numel() for p in model.parameters())
+
+
+def print_model_summary(model):
+    
+    total_params = 0
+    trainable_params = 0
+
+    print("\nModel Summary")
+    print("-"*70)
+
+    for name, module in model.named_children():        
+        n_params = get_num_params(module)
+        n_trainable = get_num_params(module, trainable_only=True)
+        total_params += n_params
+        trainable_params += n_trainable
+        print(f"{name:<20} | params: {n_params:>10} | trainable: {n_trainable:>10}")
+    
+    print("-"*70)
+    print(f"{'Total':<20} | params: {total_params:>10} | trainable: {trainable_params:>10}")
+    print()
+
+
 def run_eval(cfg, split, num_samples, seed=None):
 
     run_dir = cfg.run_dir
@@ -211,36 +246,75 @@ def run_eval(cfg, split, num_samples, seed=None):
     return metrics
 
 
-def get_num_params(model, trainable_only=False):
-    if trainable_only:
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-    return sum(p.numel() for p in model.parameters())
+def run_train(cfg, debug=False):
+
+    print("Loading configuration")
+    logger = Logger(**vars(cfg.logger))
+    run_dir = logger.get_run_dir()
+    cfg.run_dir = run_dir
+    save_config(cfg, run_dir)
+
+    print("Setting up loaders")
+    train_loader = get_data_loader(split="train", **vars(cfg.data_loader))
+    val_loader = get_data_loader(split="val", **vars(cfg.data_loader))
+
+    print("Initializing model")
+    model = MODEL_REGISTRY[cfg.name](cfg.model)
+    optimizer = create_optimizer(model, cfg.optimizer)
+
+    print("Starting training")
+    trainer = Trainer(model, optimizer, run_dir, **vars(cfg.trainer))
+    trainer.fit(train_loader, val_loader, debug=debug)
 
 
-def print_model_summary(model):
+def run_sweep(cfg, search_space, num_trials, num_samples, debug=False):
     
-    total_params = 0
-    trainable_params = 0
+    leaderboard = []
 
-    print("\nModel Summary")
-    print("-"*70)
+    log_dir = cfg.logger.log_dir
+    logger = setup_logger(name="sweep_log", save_dir=log_dir)
+    logger.info(f"Starting sweep with {num_trials} trials")
 
-    for name, module in model.named_children():        
-        n_params = get_num_params(module)
-        n_trainable = get_num_params(module, trainable_only=True)
-        total_params += n_params
-        trainable_params += n_trainable
-        print(f"{name:<20} | params: {n_params:>10} | trainable: {n_trainable:>10}")
+    for _ in range(num_trials):
+
+        cfg_version = None
+        
+        try:
+            cfg_version, params = sample_config(cfg, search_space)
+            run_train(cfg_version, debug=debug)
+
+        except Exception as e:
+            run_dir = getattr(cfg_version, "run_dir", None) if cfg_version else None
+            version = get_version(run_dir)
+            logger.error(f"Something failed in version {version}: {e}")
+            continue
+
+        metrics = run_eval(cfg_version, split="val", num_samples=num_samples, seed=0) # rembember seed here !?
+        version = get_version(cfg_version.run_dir)
+        loss = metrics["loss_mean"]
+        logger.info(f"Finished version {version} | loss={loss:.5f}")
+
+        leaderboard.append(make_leaderboard_entry(version, metrics, params))
+        save_leaderboard(leaderboard, log_dir)
     
-    print("-"*70)
-    print(f"{'Total':<20} | params: {total_params:>10} | trainable: {trainable_params:>10}")
-    print()
+    logger.info("Finished sweep!")
 
 
+def get_version(run_dir):
+    return run_dir.split("_")[-1] if run_dir else None
 
+
+def make_leaderboard_entry(version, metrics, params):
+    return {
+        "version": version,
+        **metrics,
+        **params,
+    }
+
+
+def save_leaderboard(leaderboard, log_dir, sort_by="loss_mean"):
     
-
-
-
-
+    df = pd.DataFrame(leaderboard)
+    df = df.sort_values(sort_by, ascending=True)
+    df.to_csv(f"{log_dir}/leaderboard.csv", index=False)
     
