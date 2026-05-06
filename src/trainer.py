@@ -6,11 +6,12 @@ from tqdm import tqdm
 from contextlib import nullcontext
 
 from src.models import MODEL_REGISTRY, load_checkpoint
-from src.datasets import get_data_loader
+from src.datasets import get_data_loader, get_cond_loader
 from src.logger import Logger
 from src.optimizers import create_optimizer
-from src.config import save_config, sample_config
+from src.config import save_config, sample_config, load_config
 from src.logger import setup_logger
+from src.data_processing import DataProcessor, concat_dict, load_stats
 
 
 # TO DO:
@@ -83,6 +84,7 @@ class Trainer:
 
                 # for debugging purpose 
                 if debug:
+                    # pack this into a class?
                     state_cpu = torch.random.get_rng_state()
                     state_cuda = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
                     set_seed()
@@ -318,3 +320,41 @@ def save_leaderboard(leaderboard, log_dir, sort_by="loss_mean"):
     df = df.sort_values(sort_by, ascending=True)
     df.to_csv(f"{log_dir}/leaderboard.csv", index=False)
     
+
+def run_sampling(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
+
+    cfg_version = load_config(f"{model_dir}/config.yaml")
+
+    device = torch.device(cfg_sampling.device)
+    model = MODEL_REGISTRY[cfg_version.name](cfg_version.model).to(device)
+    load_checkpoint(run_dir=model_dir, model=model, device=device)
+
+    stats = load_stats(load_dir=data_dir)
+    standardize_vars = cfg_version.data_loader.standardize_vars
+    data_processor = DataProcessor(cfg_filters, output_dir=save_dir)
+    
+    print("Starting sampling")
+
+    for i in range(cfg_sampling.num_files):
+        
+        data_loader = get_cond_loader(
+            standardize_vars=standardize_vars, 
+            stats=stats, 
+            **vars(cfg_sampling.data_loader)
+            )
+        
+        data, meta = {}, {}
+        iterator = tqdm(data_loader,leave=False)
+        
+        for batch in iterator:
+            batch = batch.to(device) if torch.is_tensor(batch) else batch
+
+            with torch.no_grad():
+                data_b, meta_b = model.sample(batch)
+                data = concat_dict(data, data_b)
+                meta = concat_dict(meta, meta_b)
+
+        data, meta = data_processor.inverse_transform(data, meta, stats, standardize_vars)
+        data_processor.save_data(data, meta, stage="sampled", file_idx=i+1)
+
+        print("Finished sampling")
