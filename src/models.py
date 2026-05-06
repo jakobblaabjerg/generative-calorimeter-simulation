@@ -36,7 +36,11 @@ def make_jac_func(transform: str):
     return lambda x: coef * torch.log(x)
 
 
-class MixtureDensityNetwork(nn.Module):
+
+
+class MixtureDensityNetworkV1(nn.Module):
+
+    # this a the flat version of mdn
 
     def __init__(self, cfg):
 
@@ -54,11 +58,11 @@ class MixtureDensityNetwork(nn.Module):
         self.point_dim = len(self.z_vars)
 
         self.mlp = MLP(
-            hidden_layers=cfg.hidden_layers, 
-            layer_norm=cfg.layer_norm, 
+            hidden_layers=cfg.mlp.hidden_layers, 
+            layer_norm=cfg.mlp.layer_norm, 
             input_size=cfg.cond_dim, 
             output_size=1+self.k*(2*self.point_dim+1), 
-            activation=cfg.activation
+            activation=cfg.mlp.activation
             )
 
 
@@ -189,6 +193,189 @@ class MixtureDensityNetwork(nn.Module):
         return data, meta
 
 
+class MixtureDensityNetworkV2(nn.Module):
+
+    # this is a grouped version of mdn
+
+    def __init__(self, cfg):
+
+        super().__init__()
+
+        self.k = cfg.k
+        self.alpha = cfg.alpha 
+        self.add_jacobian = cfg.add_jacobian
+        self.alpha = self.alpha
+       
+        if self.add_jacobian:
+            self.z_hat_jac_func = make_jac_func(cfg.transforms.z_hat)
+            self.e_jac_func = make_jac_func(cfg.transforms.e)
+       
+        _, self.z_vars, self.c_vars = setup_var_names(cfg.transforms, cfg.spherical)
+        self.point_dim = len(self.z_vars)
+
+        self.mlp = MLP(
+            hidden_layers=cfg.mlp.hidden_layers, 
+            layer_norm=cfg.mlp.layer_norm, 
+            input_size=cfg.cond_dim, 
+            output_size=cfg.mdn_head.input_size,
+            activation=cfg.mlp.activation
+            )
+
+        self.poisson_head = MLP(
+            hidden_layers=cfg.poisson_head.hidden_layers,
+            layer_norm=cfg.poisson_head.layer_norm,
+            input_size=cfg.mdn_head.input_size,
+            output_size=1,
+            activation=cfg.mlp.activation
+        )
+
+        self.mdn_head = MLP(
+            hidden_layers=cfg.mdn_head.hidden_layers,
+            layer_norm=cfg.mdn_head.layer_norm,
+            input_size=cfg.mdn_head.input_size,
+            output_size=self.k*(2*self.point_dim+1),
+            activation=cfg.mlp.activation
+        )
+
+    def forward(self, x, z, c, num_points):
+
+        # shared encoder forward pass
+        emb = self.mlp(c)
+
+        rate = self.poisson_head(emb)
+        rate = torch.exp(rate).squeeze(-1)
+        # rate = F.softplus(rate).squeeze(-1)
+        loss_size = self.loss_size(rate, num_points)
+
+        pi, means, log_vars = self.split(self.mdn_head(emb))        
+        pi = F.softmax(pi, dim=1)
+        loss_point = self.loss_point(pi, means, log_vars, z, x, num_points)
+
+        return self.alpha * torch.mean(loss_point), torch.mean(loss_size)
+
+
+    def split(self, out):
+
+        batch_size = out.size(0)
+        idx = 0
+
+        pi = out[:, idx:idx+self.k]
+        idx += self.k
+
+        means = out[:, idx:idx+self.k*self.point_dim]
+        means = means.view(batch_size, self.k, self.point_dim)
+        idx += self.k*self.point_dim
+
+        log_vars = out[:, idx:idx+self.k*self.point_dim]
+        log_vars = log_vars.view(batch_size, self.k, self.point_dim)
+
+        return pi, means, log_vars
+  
+
+    def loss_size(self, rate, num_points):
+
+        log_prob = num_points * torch.log(rate.clamp_min(1e-8)) - rate - torch.lgamma(num_points + 1)        
+        return -log_prob
+
+
+    def loss_point(self, pi, means, log_vars, z, x, num_points):
+
+        # expand inputs to shape(sum(num_points), k) to match point-level
+        pi = torch.repeat_interleave(pi, num_points, dim=0)  
+        means = torch.repeat_interleave(means, num_points, dim=0) 
+        log_vars = torch.repeat_interleave(log_vars, num_points, dim=0)
+
+        z = z.unsqueeze(1).expand(-1, self.k, -1)  # (sum(num_points), k, point_dim)
+        
+        # gaussian log probability
+        inv_var = torch.exp(-log_vars)
+        log_prob = -0.5 * (log_vars + (z - means)**2 * inv_var + LOG_2PI).sum(dim=2) # (sum(num_points), k)
+
+        # weight by mixture
+        weighted_log_prob = torch.log(pi.clamp_min(1e-8)) + log_prob # (sum(num_points), k)
+
+        # log-sum-exp trick
+        log_prob_sum = torch.logsumexp(weighted_log_prob, dim=1) # (sum(num_points),)
+        log_jacobian = torch.zeros_like(log_prob_sum) # (sum(num_points),)
+
+        if self.add_jacobian and self.e_jac_func is not None:
+            log_jacobian += self.e_jac_func(x[:, -1])
+        
+        if self.add_jacobian and self.z_hat_jac_func is not None:
+            log_jacobian += self.z_hat_jac_func(x[:, -2])
+
+        # normalize loss event-level
+        loss = torch.segment_reduce(log_prob_sum+log_jacobian, reduce="mean", lengths=num_points, axis=0)        
+        return - loss
+
+
+    def sample_num_points(self, c):
+
+        emb = self.mlp(c)
+        rate = self.poisson_head(emb)
+        rate = torch.exp(rate).squeeze(-1) 
+        num_points = torch.distributions.Poisson(rate).sample()
+        num_points = torch.clamp(num_points, min=1).long()
+
+        return num_points
+
+
+    def sample(self, c):
+
+        data, meta = {}, {}
+
+        emb = self.mlp(c)
+        rate = self.poisson_head(emb)
+        rate = torch.exp(rate).squeeze(-1) 
+        # rate = F.softplus(rate).squeeze(-1)
+        num_points = torch.distributions.Poisson(rate).sample()
+        num_points = num_points.cpu().numpy().astype(int)
+
+        pi, means, log_vars = self.split(self.mdn_head(emb))
+        pi = F.softmax(pi, dim=1)
+    
+        for i in range(len(num_points)):
+
+            if num_points[i] == 0:
+                continue
+
+            mix = torch.distributions.Categorical(pi[i])
+            gauss = torch.distributions.Normal(means[i], torch.exp(0.5 * log_vars[i]))
+            comp = torch.distributions.Independent(gauss, 1)
+            mog = torch.distributions.MixtureSameFamily(mix, comp)
+            z = mog.sample(sample_shape=(num_points[i],))
+
+            z = z.cpu().numpy()
+            
+            for j, var in enumerate(self.z_vars):
+                if var in data:
+                    data[var] = np.concatenate((data[var], z[:, j]))
+                else:
+                    data[var] = z[:, j]
+
+        c = c.cpu().numpy()        
+        meta["eid"] = np.arange(len(num_points))
+        for j, var in enumerate(self.c_vars):
+            meta[var] = c[:, j]     
+        data["eid"] = np.repeat(meta["eid"], num_points)
+        
+        return data, meta
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ConditionalFlowMatching(nn.Module):
 
     def __init__(self, cfg):
@@ -197,7 +384,8 @@ class ConditionalFlowMatching(nn.Module):
 
         # auxillary model used for inference     
         self.aux_model = None
-        self.aux_model_dir = cfg.aux_model_dir
+        self.aux_model_dir = cfg.aux_model.model_dir
+        self.aux_model_name = cfg.aux_model.name
 
         # number integration steps 
         self.num_steps = cfg.num_steps
@@ -316,7 +504,7 @@ class ConditionalFlowMatching(nn.Module):
         cfg_aux_model = load_config(f"{self.aux_model_dir}/config.yaml")
 
         # load auxillary model
-        self.aux_model = MixtureDensityNetwork(cfg_aux_model.model)
+        self.aux_model = MODEL_REGISTRY[self.aux_model_name](cfg_aux_model.model)
         load_checkpoint(self.aux_model_dir, self.aux_model, device)
 
 
@@ -800,7 +988,8 @@ class Pooling(nn.Module):
 
 
 MODEL_REGISTRY = {
-    "mdn": MixtureDensityNetwork,
+    "mdnV1": MixtureDensityNetworkV1,
+    "mdnV2": MixtureDensityNetworkV2,
     "cfm": ConditionalFlowMatching,
 }
 
