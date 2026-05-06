@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import DataLoader
 from src.data_processing import load_stats, load_split, standardize_data, create_meta, safe_underscore, merge_dicts
 from collections import defaultdict
-from functools import partial
 
 
 def setup_var_names(transforms, spherical):
@@ -57,7 +56,7 @@ class GroupedDataset(BaseDataset):
             transforms, 
             spherical, 
             standardize_vars,
-            sort_by_time,
+            sort_by_time=False,
             ):
         
         super().__init__(split, load_dir, num_files, transforms, spherical, standardize_vars)
@@ -187,10 +186,8 @@ def get_data_loader(batch_size, split, struc, collate=None, **kwargs):
 
     if struc == "flat":
         dataset = FlatDataset(split=split, **kwargs) 
-
     elif struc == "grouped":
         dataset = GroupedDataset(split=split, **kwargs) 
-
     else:
         raise ValueError(f"Unknown structure: {struc}")
 
@@ -233,22 +230,21 @@ class SampleDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        n_samples,
+        num_samples,
         standardize_vars,
-        load_dir,
+        stats,
         phi=None,
         theta=None, 
         e_inc=None,
         seed=None
         ):
 
-        self.meta = create_meta(n_samples, phi, theta, e_inc, seed=seed)
-        stats = load_stats(load_dir)
+        self.meta = create_meta(num_samples, phi, theta, e_inc, seed=seed)
         standardize_data(self.meta, stats, standardize_vars) 
-        self.n_samples = n_samples
+        self.num_samples = num_samples
 
     def __len__(self):
-        return self.n_samples
+        return self.num_samples
 
     def __getitem__(self, idx):
 
