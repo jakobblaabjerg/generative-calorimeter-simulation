@@ -9,7 +9,7 @@ def safe_underscore(name):
     return f"_{name}" if name else ""
 
 
-def create_meta(n_samples, phi=None, theta=None, e_inc=None, normalize=True, seed=None):
+def create_meta(num_samples, phi=None, theta=None, e_inc=None, normalize=True, seed=None):
 
     rng = np.random.default_rng(seed)
     meta = {}
@@ -22,10 +22,10 @@ def create_meta(n_samples, phi=None, theta=None, e_inc=None, normalize=True, see
     
     for key, (min_val, max_val, val) in specs.items():
         if val is None:
-            u = rng.uniform(size=n_samples).astype(np.float32)
+            u = rng.uniform(size=num_samples).astype(np.float32)
             meta[key] = u * (max_val - min_val) + min_val
         else:
-            meta[key] = np.repeat(val, n_samples).astype(np.float32)
+            meta[key] = np.repeat(val, num_samples).astype(np.float32)
     
     if normalize:
         normalize_meta(meta, inverse=False)
@@ -524,8 +524,6 @@ class DataProcessor():
         self.cfg = cfg
         self.output_dir = output_dir 
         self.input_dir = input_dir 
-
-        self.stats = self.load_stats() # load it if exists 
         
         self.rng = np.random.default_rng(42)
 
@@ -698,10 +696,81 @@ class DataProcessor():
         mask1 = meta["retainment_steps"] >= threshold
         data, meta = self._apply_filter(data, meta, filter_name=key, mask=mask1, level="meta", reindex=reindex)
 
+
+        # half = box_size / 2
+        # eps = 1e-4
+
+
+        # close = np.where(
+        #     (np.abs(np.abs(data["x_hat"]) - half) < eps) |
+        #     (np.abs(np.abs(data["y_hat"]) - half) < eps)
+        # )[0]
+
+        # print("Boundary points:", len(close))
+
+
         mask2 = (
             (np.abs(data["x_hat"]) <= box_size / 2) &
             (np.abs(data["y_hat"]) <= box_size / 2)
         )
+
+
+        # boundary_idx = close
+
+        # survive = boundary_idx[mask2[boundary_idx]]
+        # removed = boundary_idx[~mask2[boundary_idx]]
+
+        # print("Boundary points total:", len(boundary_idx))
+        # print("Survive:", len(survive))
+        # print("Removed:", len(removed))
+
+
+        # np.set_printoptions(precision=15)
+
+        # print("\n=== SURVIVING BOUNDARY POINTS ===")
+        # for i in survive:
+        #     print(
+        #         f"idx={i}, "
+        #         f"eid={data['eid'][i]}, "
+        #         f"x_hat={data['x_hat'][i]:.15f}, "
+        #         f"y_hat={data['y_hat'][i]:.15f}"
+        #     )
+
+        # print("\n=== REMOVED BOUNDARY POINTS ===")
+        # for i in removed:
+        #     print(
+        #         f"idx={i}, "
+        #         f"eid={data['eid'][i]}, "
+        #         f"x_hat={data['x_hat'][i]:.15f}, "
+        #         f"y_hat={data['y_hat'][i]:.15f}"
+        #     )
+
+
+        # for i in boundary_idx:
+        #     dx = abs(abs(data["x_hat"][i]) - half)
+        #     dy = abs(abs(data["y_hat"][i]) - half)
+
+        #     print(
+        #         f"idx={i}, "
+        #         f"dx={dx:.20e}, dy={dy:.20e}"
+        #     )
+
+
+        # i = 97940550
+        # half = 75
+
+        # x = data["x_hat"][i]
+        # y = data["y_hat"][i]
+
+        # dx = abs(abs(x) - half)
+        # dy = abs(abs(y) - half)
+
+        # print(f"x_hat raw: {x!r}, dx={dx:.20e}")
+        # print(f"y_hat raw: {y!r}, dy={dy:.20e}")
+
+        # print("Is boundary:", (dx < 1e-10) or (dy < 1e-10))
+
+
         return self._apply_filter(data, meta, filter_name=key, mask=mask2, level="data", reindex=reindex)
 
 
@@ -918,20 +987,12 @@ class DataProcessor():
             json.dump(stats_out, f, indent=4)
 
     
-    def load_stats(self):
-        
-        try: 
-            stats = load_stats(load_dir=self.output_dir)
-            return stats
-        
-        except Exception as e:
-            return None 
-        
+       
     
-    def inverse_transform(self, data, meta, standardize_vars):
+    def inverse_transform(self, data, meta, stats, standardize_vars):
 
-        standardize_data(data, self.stats, standardize_vars, inverse=True)
-        standardize_data(meta, self.stats, standardize_vars, inverse=True)
+        standardize_data(data, stats, standardize_vars, inverse=True)
+        standardize_data(meta, stats, standardize_vars, inverse=True)
 
         normalize_data(data, meta, self.cfg, inverse=True)
         compute_static_features(data, meta, inverse=True)
