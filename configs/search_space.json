@@ -73,6 +73,9 @@
                 ]
             ]
         },
+
+
+
         "model.mlp.layer_norm": {
             "type": "categorical",
             "values": [
@@ -91,6 +94,82 @@
             ]
         }
     },
+
+    "mdn_head": {
+        "model.mdn_head.hidden_layers": {
+            "type": "categorical",
+            "values": [
+                [
+                    64,
+                    64
+                ],
+                [
+                    128,
+                    128
+                ],
+                [
+                    32,
+                    32
+                ],
+                [
+                    64,
+                    64,
+                    64
+                ]
+            ]
+        },
+
+        "model.mdn_head.layer_norm": {
+            "type": "categorical",
+            "values": [
+                true,
+                false
+            ]
+        },
+        "model.mdn_head.input_size": {
+            "type": "categorical",
+            "values": [
+                32,
+                64,
+                128
+            ]
+        }
+    },
+
+    "poisson_head": {
+        "model.poisson_head.hidden_layers": {
+            "type": "categorical",
+            "values": [
+                [
+                    64,
+                    64
+                ],
+                [
+                    128,
+                    128
+                ],
+                [
+                    32,
+                    32
+                ],
+                [
+                    64,
+                    64,
+                    64
+                ]
+            ]
+        },
+
+        "model.poisson_head.layer_norm": {
+            "type": "categorical",
+            "values": [
+                true,
+                false
+            ]
+        }
+    },
+
+
     "encoder": {
         "sequence": {
             "model.encoder.output_size": {

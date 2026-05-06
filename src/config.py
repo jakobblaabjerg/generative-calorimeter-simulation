@@ -101,9 +101,12 @@ def get_search_space(load_dir, model, encoder, selected_space):
             if encoder is not None:
                 selected_space.append("encoder")
         
-        elif model == "mdn":
+        elif model == "mdnV1":
             selected_space = ["optim", "data_loader", "mlp", "mixture"] 
-    
+
+        elif model == "mdnV2":
+            selected_space = ["optim", "data_loader", "mlp", "mixture", "mdn_head", "poisson_head"]
+
     else:
         selected_space = [s.strip() for s in selected_space.split(",")]
 
