@@ -1,4 +1,4 @@
-name: "mdn"
+name: "mdnV1"
 
 model:  
   cond_dim: 4 
@@ -13,7 +13,6 @@ model:
     hidden_layers: [128, 128, 128]
     layer_norm: True
     activation: sigmoid
-
 
 trainer:
   epochs: 50
