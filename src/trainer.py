@@ -171,6 +171,7 @@ def run_step(model, batch, device, optimizer=None):
     if optimizer is not None:
         optimizer.zero_grad() 
         loss_total.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0) # test
         optimizer.step()
 
     # detach from computational graph
@@ -213,6 +214,9 @@ def print_model_summary(model):
 
 
 def run_eval(cfg, split, num_samples, seed=None):
+
+    # TO DO:
+    # save time to generate
 
     run_dir = cfg.run_dir
     model_name = cfg.name 
