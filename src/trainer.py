@@ -171,7 +171,7 @@ def run_step(model, batch, device, optimizer=None):
     if optimizer is not None:
         optimizer.zero_grad() 
         loss_total.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0) # test
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0) # test
         optimizer.step()
 
     # detach from computational graph
