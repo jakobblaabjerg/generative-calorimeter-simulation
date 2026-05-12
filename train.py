@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--patience", type=int, default=None)
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
+    parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--log_dir", type=str, default=None)
     parser.add_argument("--data_dir", type=str, default=None)
     parser.add_argument("--num_files", type=int, default=None)
@@ -39,6 +40,7 @@ def main():
         "data_loader.load_dir": args.data_dir,
         "data_loader.num_files": args.num_files,
         "data_loader.batch_size": args.batch_size,
+        "optimizer.learning_rate": args.lr,
     }
 
     override_config(cfg, overrides)
