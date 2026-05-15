@@ -10,8 +10,8 @@ def main():
     parser.add_argument("--model_dir", type=str, required=True)
     parser.add_argument("--cfg_sampling", type=str, default="configs/sampling.yanml")
     parser.add_argument("--num_mc_samples", type=int, default=1)
-    parser.add_argument("--data_dir", type=int, required=True)
-    parser.add_argument("--save_dir", type=int, default=None)
+    parser.add_argument("--data_dir", type=str, required=True)
+    parser.add_argument("--save_dir", type=str, default=None)
     args = parser.parse_args()
 
     cfg_sampling = load_config(file_path=args.cfg_sampling)
