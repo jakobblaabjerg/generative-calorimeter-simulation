@@ -19,7 +19,7 @@ def main():
     if args.save_dir is not None:
         save_dir = args.save_dir
     else:
-        save_dir = os.path.dirname(os.path.abspath(args.cfg_file))
+        save_dir = os.path.dirname(os.path.abspath(args.model_dir))
 
     os.makedirs(save_dir, exist_ok=True)
 
