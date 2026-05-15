@@ -8,7 +8,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_dir", type=str, required=True)
-    parser.add_argument("--cfg_sampling", type=str, default="configs/sampling.yanml")
+    parser.add_argument("--cfg_sampling", type=str, default="configs/sampling.yaml")
     parser.add_argument("--num_mc_samples", type=int, default=1)
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, default=None)
