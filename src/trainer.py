@@ -4,6 +4,8 @@ import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from contextlib import nullcontext
+import time
+import json
 
 from src.models import MODEL_REGISTRY, load_checkpoint
 from src.datasets import get_data_loader, get_cond_loader
@@ -213,43 +215,127 @@ def print_model_summary(model):
     print()
 
 
-def run_eval(cfg, split, num_samples, seed=None):
+def get_model(cfg, device=None):
 
-    # TO DO:
-    # save time to generate
+    print("Loading model")
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    run_dir = cfg.run_dir
-    model_name = cfg.name 
+    model = MODEL_REGISTRY[cfg.name](cfg.model)
+    load_checkpoint(cfg.run_dir, model, device)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return model 
 
-    model = MODEL_REGISTRY[model_name](cfg.model)
-    load_checkpoint(run_dir, model, device)
 
+def evaluate_complexity(model, num_mc_samples):
+
+    return {
+        "num_mc_samples": num_mc_samples,
+        "num_params": get_num_params(model)
+        }
+
+def evaluate_quality(model, cfg, split, device, num_mc_samples, seed):
+    
     data_loader = get_data_loader(split=split, **vars(cfg.data_loader))
-
     losses = []
 
-    for i in range(num_samples):
+    iterator = tqdm(range(num_mc_samples), leave=False)
 
+    for _ in iterator:
         if seed is not None:
+
+            # # better than global rng
+            # generator = torch.Generator(device=device)
+            # generator.manual_seed(seed+i)
             set_seed(seed=seed+i)
 
         loss, _ = run_epoch(model, data_loader, device)
         losses.append(loss)
-    
-    loss_mean = sum(losses) / len(losses)
+
+    loss_mean = sum(losses)/len(losses)
     loss_std = (sum((x - loss_mean)**2 for x in losses)/len(losses))**0.5
-    num_params = get_num_params(model)
 
-    metrics = {
+    return {
         "loss_mean": loss_mean,
-        "loss_std": loss_std,
-        "num_samples": num_samples,
-        "num_params": num_params,
-    } 
+        "loss_std":  loss_std,
+    }
 
+
+def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, device, num_mc_samples, seed):
+
+    stats = load_stats(load_dir=data_dir)
+    standardize_vars = cfg.data_loader.standardize_vars
+    data_loader = get_cond_loader(
+        standardize_vars=standardize_vars, 
+        stats=stats,
+        seed=seed, 
+        **vars(cfg_sampling.data_loader)
+        )
+
+    times = []
+    iterator = tqdm(range(num_mc_samples), leave=False)
+
+    for _ in iterator:
+        
+        synchronize(device)
+        start = time.time()
+        generate_samples(model, data_loader, device, return_outputs=False)
+        synchronize(device)
+        end = time.time()
+        times.append(end-start)
+
+    time_mean = sum(times)/len(times)
+    time_std = (sum((x - time_mean)**2 for x in times)/len(times))**0.5
+
+    return {
+        "time_mean": time_mean,
+        "time_std":  time_std,
+    }
+
+
+def run_eval(cfg, cfg_sampling, data_dir, num_mc_samples, seed=None):
+
+    model = get_model(cfg)
+    device = next(model.parameters()).device
+
+    metrics = {}
+    
+    print("Evaluating complexity")
+    metrics_complexity = evaluate_complexity(
+        model=model, 
+        num_mc_samples=num_mc_samples
+    )
+    metrics.update(metrics_complexity)
+
+    print("Evaluating quality")
+    metrics_quality = evaluate_quality(
+        model=model, 
+        cfg=cfg, 
+        split="test", 
+        device=device, 
+        num_mc_samples=num_mc_samples, 
+        seed=seed
+    )
+    metrics.update(metrics_quality)
+    
+    print("Evaluating efficiency")
+    metrics_efficiency = evaluate_efficiency(
+        model=model, 
+        cfg=cfg, 
+        cfg_sampling=cfg_sampling, 
+        data_dir=data_dir, 
+        device=device, 
+        num_mc_samples=num_mc_samples, 
+        seed=seed
+    )
+    metrics.update(metrics_efficiency)
+    
     return metrics
+
+
+def synchronize(device):
+    if device.type == "cuda":
+        torch.cuda.synchronize()
 
 
 def run_train(cfg, debug=False):
@@ -273,7 +359,7 @@ def run_train(cfg, debug=False):
     trainer.fit(train_loader, val_loader, debug=debug)
 
 
-def run_sweep(cfg, search_space, num_trials, num_samples, debug=False):
+def run_sweep(cfg, search_space, num_trials, num_mc_samples, debug=False):
     
     leaderboard = []
 
@@ -295,7 +381,28 @@ def run_sweep(cfg, search_space, num_trials, num_samples, debug=False):
             logger.error(f"Something failed in version {version}: {e}")
             continue
 
-        metrics = run_eval(cfg_version, split="val", num_samples=num_samples, seed=0) # rembember seed here !?
+
+        model = get_model(cfg)
+        device = next(model.parameters()).device
+
+        metrics = {}
+    
+        metrics_complexity = evaluate_complexity(
+            model=model, 
+            num_mc_samples=num_mc_samples
+        )
+        metrics.update(metrics_complexity)
+
+        metrics_quality = evaluate_quality(
+            model=model, 
+            cfg=cfg, 
+            split="test", 
+            device=device, 
+            num_mc_samples=num_mc_samples, 
+            seed=123
+        )
+        metrics.update(metrics_quality)
+
         version = get_version(cfg_version.run_dir)
         loss = metrics["loss_mean"]
         logger.info(f"Finished version {version} | loss={loss:.5f}")
@@ -330,8 +437,7 @@ def run_sampling(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
     cfg_version = load_config(f"{model_dir}/config.yaml")
 
     device = torch.device(cfg_sampling.device)
-    model = MODEL_REGISTRY[cfg_version.name](cfg_version.model).to(device)
-    load_checkpoint(run_dir=model_dir, model=model, device=device)
+    model = get_model(cfg_version, device=device)
 
     stats = load_stats(load_dir=data_dir)
     standardize_vars = cfg_version.data_loader.standardize_vars
@@ -347,18 +453,28 @@ def run_sampling(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
             **vars(cfg_sampling.data_loader)
             )
         
-        data, meta = {}, {}
-        iterator = tqdm(data_loader,leave=False)
-        
-        for batch in iterator:
-            batch = batch.to(device) if torch.is_tensor(batch) else batch
-
-            with torch.no_grad():
-                data_b, meta_b = model.sample(batch)
-                data = concat_dict(data, data_b)
-                meta = concat_dict(meta, meta_b)
-
+        data, meta = generate_samples(model, data_loader, device)
         data, meta = data_processor.inverse_transform(data, meta, stats, standardize_vars)
         data_processor.save_data(data, meta, stage="sampled", file_idx=i+1)
 
         print("Finished sampling")
+
+
+def generate_samples(model, data_loader, device, collect_outputs=True):
+
+    data, meta = {}, {}
+    iterator = tqdm(data_loader,leave=False)
+    model.eval()
+    
+    with torch.no_grad():
+
+        for batch in iterator:
+
+            batch = batch.to(device) if torch.is_tensor(batch) else batch
+            data_b, meta_b = model.sample(batch)
+
+            if collect_outputs:
+                data = concat_dict(data, data_b)
+                meta = concat_dict(meta, meta_b)
+
+    return data, meta 

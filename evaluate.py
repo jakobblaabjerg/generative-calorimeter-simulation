@@ -8,12 +8,14 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg_file", type=str, required=True)
-    parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--num_samples", type=int, default=1)
+    parser.add_argument("--cfg_sampling", type=str, default="configs/sampling.yanml")
+    parser.add_argument("--num_mc_samples", type=int, default=1)
+    parser.add_argument("--data_dir", type=int, required=True)
     parser.add_argument("--save_dir", type=int, default=None)
     args = parser.parse_args()
 
     cfg = load_config(file_path=args.cfg_file)
+    cfg_sampling = load_config(file_path=args.cfg_sampling)
 
     if args.save_dir is not None:
         save_dir = args.save_dir
@@ -24,18 +26,15 @@ def main():
 
     metrics = run_eval(
         cfg=cfg, 
-        split=args.split, 
-        num_samples=args.num_samples
+        cfg_sampling=cfg_sampling, 
+        data_dir=args.data_dir, 
+        num_mc_samples=args.num_mc_samples, 
+        seed=123,
         )
 
-    metrics["split"] = args.split
-
-    save_path = os.path.join(save_dir, f"metrics_{args.split}.json")
+    save_path = os.path.join(save_dir, f"metrics.json")
     with open(save_path, "w") as f:
         json.dump(metrics, f, indent=4)
-
-    print(f"Saved metrics to: {save_path}")
-
 
 if __name__ == "__main__":
     main()

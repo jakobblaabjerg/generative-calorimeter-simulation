@@ -5,6 +5,9 @@ from src.data_processing import load_stats, load_split, standardize_data, create
 from collections import defaultdict
 
 
+from torch.utils.data import BatchSampler, RandomSampler
+
+
 def setup_var_names(transforms, spherical):
 
     x_vars = ["z_hat", "e"]
@@ -139,6 +142,70 @@ def collate_sparse(batch):
     return x, z, c, num_points
 
 
+
+class DataStore:
+    def __init__(self, x, z, c, num_points):
+        self.x = torch.from_numpy(x)
+        self.z = torch.from_numpy(z)
+        self.c = torch.from_numpy(c)
+        self.num_points = torch.from_numpy(num_points)
+
+class FastFlatDataset(BaseDataset):
+
+    def __init__(
+            self, 
+            split, 
+            load_dir, 
+            num_files, 
+            transforms, 
+            spherical, 
+            standardize_vars,
+            ):
+        
+        super().__init__(split, load_dir, num_files, transforms, spherical, standardize_vars)
+        
+        data = merge_dicts(self.data, self.meta)
+        del self.data, self.meta        
+        
+        self.store = self._build_store(data)
+        self.num_samples = self.store.x.shape[0]
+
+
+    def _build_store(self, data):
+
+        x = np.stack([data[k] for k in self.x_vars], axis=1).astype(np.float32)
+        z = np.stack([data[k] for k in self.z_vars], axis=1).astype(np.float32)
+        c = np.stack([data[k] for k in self.c_vars], axis=1).astype(np.float32)
+        num_points = data["N"]
+
+        return DataStore(x, z, c, num_points)
+
+
+class IndexDataset(torch.utils.data.Dataset):
+
+    def __init__(self, num_samples):
+        self.num_samples = num_samples
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        return idx
+
+
+def make_collate(store):
+
+    def collate(batch_indices):
+        idx = torch.as_tensor(batch_indices, dtype=torch.long)
+        return (
+            store.x.index_select(0, idx),
+            store.z.index_select(0, idx),
+            store.c.index_select(0, idx),
+            store.num_points.index_select(0, idx)
+        )
+    return collate
+
+
 class FlatDataset(BaseDataset):
 
     def __init__(
@@ -181,31 +248,44 @@ class FlatDataset(BaseDataset):
 def get_data_loader(batch_size, split, struc, collate=None, **kwargs):
 
     # loader used for traning 
-
-    collate_fn = get_collate_fn(collate)
-
     if struc == "flat":
-        dataset = FlatDataset(split=split, **kwargs) 
+
+        dataset = FastFlatDataset(split=split, **kwargs)
+        loader = DataLoader(
+            IndexDataset(dataset.num_samples),
+            batch_size=batch_size,
+            shuffle=(split=="train"),
+            collate_fn=make_collate(dataset.store)
+        )
+
+        # dataset = FlatDataset(split=split, **kwargs) 
+        # loader = DataLoader(
+        #     dataset,
+        #     batch_size=batch_size,
+        #     shuffle=(split == "train"),
+        # )
+
+
     elif struc == "grouped":
+        collate_fn = get_collate_fn(collate)
         dataset = GroupedDataset(split=split, **kwargs) 
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=(split == "train"),
+            collate_fn=collate_fn
+        )
+
     else:
         raise ValueError(f"Unknown structure: {struc}")
 
+    return loader 
+
+
+def get_cond_loader(batch_size, seed=None, **kwargs):
 
     return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=(split == "train"),
-        collate_fn=collate_fn
-    )
-
-
-def get_cond_loader(batch_size, **kwargs):
-
-    # loader used sampling 
-
-    return DataLoader(
-        SampleDataset(**kwargs),
+        SampleDataset(seed=seed, **kwargs),
         batch_size=batch_size,
         shuffle=False,
     )
