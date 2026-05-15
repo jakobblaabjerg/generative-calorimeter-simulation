@@ -293,8 +293,9 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, device, num_mc_sampl
     }
 
 
-def run_eval(cfg, cfg_sampling, data_dir, num_mc_samples, seed=None):
+def run_eval(model_dir, cfg_sampling, data_dir, num_mc_samples, seed=None):
 
+    cfg = load_config(f"{model_dir}/config.yaml")
     model = get_model(cfg)
     device = next(model.parameters()).device
 
