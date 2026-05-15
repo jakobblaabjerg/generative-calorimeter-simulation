@@ -241,7 +241,7 @@ def evaluate_quality(model, cfg, split, device, num_mc_samples, seed):
 
     iterator = tqdm(range(num_mc_samples), leave=False)
 
-    for _ in iterator:
+    for i in iterator:
         if seed is not None:
 
             # # better than global rng
