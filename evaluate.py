@@ -15,11 +15,7 @@ def main():
     args = parser.parse_args()
 
     cfg_sampling = load_config(file_path=args.cfg_sampling)
-
-    if args.save_dir is not None:
-        save_dir = args.save_dir
-    else:
-        save_dir = os.path.dirname(os.path.abspath(args.model_dir))
+    save_dir = args.save_dir if args.save_dir is not None else args.model_dir
 
     os.makedirs(save_dir, exist_ok=True)
 
