@@ -461,7 +461,7 @@ def run_sampling(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
         print("Finished sampling")
 
 
-def generate_samples(model, data_loader, device, collect_outputs=True):
+def generate_samples(model, data_loader, device, return_outputs=True):
 
     data, meta = {}, {}
     iterator = tqdm(data_loader,leave=False)
@@ -474,7 +474,7 @@ def generate_samples(model, data_loader, device, collect_outputs=True):
             batch = batch.to(device) if torch.is_tensor(batch) else batch
             data_b, meta_b = model.sample(batch)
 
-            if collect_outputs:
+            if return_outputs:
                 data = concat_dict(data, data_b)
                 meta = concat_dict(meta, meta_b)
 
