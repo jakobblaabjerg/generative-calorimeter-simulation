@@ -417,8 +417,25 @@ def compute_detector_distance(meta):
 
     meta["entry_distance"] = entry_distance
 
-    exit_distance = np.minimum(r_barrel[1] / np.sin(theta), z_endcap[1] / np.cos(theta))
+
+    # for numerical stability
+    eps = 1e-7
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+    barrel_exit = r_barrel[1] / sin_theta
+    endcap_exit = np.full_like(theta, np.inf)
+    
+    
+    mask = np.abs(cos_theta) >= eps
+
+    print(len(mask))
+
+    endcap_exit[mask] = z_endcap[1] / cos_theta[mask]
+    exit_distance = np.minimum(barrel_exit, endcap_exit)
     meta["exit_distance"] = exit_distance
+  
+    # exit_distance = np.minimum(r_barrel[1] / np.sin(theta), z_endcap[1] / np.cos(theta))
+    # meta["exit_distance"] = exit_distance
 
 
 
