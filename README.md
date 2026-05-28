@@ -12,7 +12,6 @@ The project supports multiple model architectures and configurable training pipe
 .
 ├── configs/                 # YAML configuration files
 ├── src/                     # Core source code
-├── utils/                   # Utility functions
 ├── create_dataset.py        # Dataset creation script
 ├── train.py                 # Model training script
 ├── sweep.py                 # Hyperparameter sweep script
@@ -28,8 +27,8 @@ The project supports multiple model architectures and configurable training pipe
 Clone the repository:
 
 ```bash
-git clone <repo-url>
-cd <repo-name>
+git clone https://github.com/jakobblaabjerg/generative-calorimeter-simulation
+cd generative-calorimeter-simulation
 ```
 
 Create a virtual environment and install dependencies:
@@ -131,7 +130,7 @@ python train.py --cfg_file <path-to-config>
 ```bash
 python train.py \
     --model cfm \
-    --encoder transformer \
+    --encoder deepsets \
     --epochs 100 \
     --batch_size 64 \
     --lr 1e-4 \
@@ -170,7 +169,8 @@ python sweep.py \
 ```bash
 python sweep.py \
     --model cfm \
-    --encoder transformer \
+    --encoder deepsets \
+    --space encoder \
     --trials 50 \
     --samples 2
 ```
@@ -259,23 +259,6 @@ metrics.json
 
 ---
 
-# Source Code Overview
-
-The `src/` directory contains the main implementation:
-
-| File | Description |
-|---|---|
-| `config.py` | Configuration loading and overrides |
-| `data_processing.py` | Dataset preprocessing pipeline |
-| `datasets.py` | Dataset classes and dataloaders |
-| `logger.py` | Logging utilities |
-| `models.py` | Model architectures |
-| `optimizers.py` | Optimizer implementations |
-| `sampler.py` | Sampling utilities |
-| `trainer.py` | Training, evaluation, and sweep pipelines |
-
----
-
 # Configuration
 
 Configuration files are located in:
@@ -321,14 +304,3 @@ logs/<experiment_name>/
 
 If you use this repository in your research, please cite the associated work.
 
----
-
-# License
-
-Add your preferred license here.
-
-Example:
-
-```text
-MIT License
-```
