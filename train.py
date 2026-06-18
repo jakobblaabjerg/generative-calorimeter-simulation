@@ -1,7 +1,7 @@
 import argparse
 
 from src.config import load_config, override_config
-from src.trainer import run_train
+from src.training.trainer import run_train
 
 
 def main():

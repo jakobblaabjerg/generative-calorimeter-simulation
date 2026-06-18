@@ -1,6 +1,7 @@
 name: "cfm"
 
-model:  
+model:
+  track_velocity: False
   cond_dim: 4 
   spherical: &SPHERICAL False
   transforms: &TRANSFORMS 
@@ -32,11 +33,13 @@ logger:
 data_loader:
   load_dir: "data/test5"
   spherical: *SPHERICAL
-  batch_size: 128
   num_files: 1
   standardize_vars: ["e_log_norm", "e_sqrt_norm", "e_inc_norm"]
   transforms: *TRANSFORMS
-  struc: "grouped"
   sort_by_time: True
-  collate:
-    mode: "sparse"
+
+  batch_size: 128
+  data_view: "event"
+  batch_mode: 
+    name: "sparse"
+

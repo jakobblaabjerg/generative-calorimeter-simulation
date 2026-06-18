@@ -1,14 +1,29 @@
 import numpy as np 
-from src.data_processing import CalorimeterSimDataset, filter_by_xy_box
+from src.calosim import CaloSimDataset
+from dataclasses import dataclass
+from src.utils import filter_dict
 
 
-def compute_spherical_coords(dataset: CalorimeterSimDataset) -> None:
+# remove this
+def filter_by_xy_box(data, box_size):
+
+    x_hat = np.abs(data["x_hat"])
+    y_hat = np.abs(data["y_hat"])
+
+    mask = (x_hat <= box_size/2) & (y_hat <= box_size/2)
+    data_filtered = filter_dict(data, mask)
+
+    return data_filtered
+
+
+
+def compute_spherical_coords(dataset: CaloSimDataset) -> None:
     """ 
     Compute spherical coordinates from incident momentum vectors. 
     
     Parameters 
     ---------- 
-    dataset : CalorimeterSimDataset 
+    dataset : CaloSimDataset 
         Dataset containing momentum components in 
         dataset.meta["p_x"], dataset.meta["p_y"], dataset.meta["p_z"]. 
         
@@ -41,13 +56,13 @@ def compute_spherical_coords(dataset: CalorimeterSimDataset) -> None:
 
 
 
-def compute_incident_energy(dataset: CalorimeterSimDataset) -> None:
+def compute_incident_energy(dataset: CaloSimDataset) -> None:
     """
     Compute incident particle energy from momentum components.
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset containing momentum components in
         dataset.meta["p_x"], dataset.meta["p_y"], dataset.meta["p_z"].
 
@@ -75,13 +90,13 @@ def compute_incident_energy(dataset: CalorimeterSimDataset) -> None:
 
 
 
-def compute_centroids(dataset: CalorimeterSimDataset) -> None:
+def compute_centroids(dataset: CaloSimDataset) -> None:
     """
     Compute energy-weighted centroids of event.
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset containing spatial coordinates and energies.
 
     Requires
@@ -105,28 +120,28 @@ def compute_centroids(dataset: CalorimeterSimDataset) -> None:
     - all steps belonging to an event share the same eid grouping
     """
 
-    eids = dataset.data["eid"] 
-    _, inverse = np.unique(eids, return_inverse=True)
+    idxs = dataset.data["idx"] 
+    _, inverse = np.unique(idxs, return_inverse=True)
 
     x = dataset.data["x"]
     y = dataset.data["y"]
     z = dataset.data["z"]
-    E = dataset.data["e"]
+    e = dataset.data["e"]
 
-    E_tot = np.bincount(inverse, weights=E)
+    e_tot = np.bincount(inverse, weights=e)
     
-    x_weighted_sum = np.bincount(inverse, weights=x*E)
-    y_weighted_sum = np.bincount(inverse, weights=y*E)
-    z_weighted_sum = np.bincount(inverse, weights=z*E)
+    x_weighted_sum = np.bincount(inverse, weights=x*e)
+    y_weighted_sum = np.bincount(inverse, weights=y*e)
+    z_weighted_sum = np.bincount(inverse, weights=z*e)
 
-    dataset.meta["x_c"] = x_weighted_sum / E_tot
-    dataset.meta["y_c"] = y_weighted_sum / E_tot
-    dataset.meta["z_c"] = z_weighted_sum / E_tot
-
-
+    dataset.meta["x_c"] = x_weighted_sum / e_tot
+    dataset.meta["y_c"] = y_weighted_sum / e_tot
+    dataset.meta["z_c"] = z_weighted_sum / e_tot
 
 
-def compute_misalignment(dataset: CalorimeterSimDataset) -> None:
+
+
+def compute_misalignment(dataset: CaloSimDataset) -> None:
 
     """
     Compute geometric misalignment between centroid direction
@@ -134,7 +149,7 @@ def compute_misalignment(dataset: CalorimeterSimDataset) -> None:
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset containing centroids and incident angles.
 
     Requires
@@ -202,7 +217,7 @@ def compute_misalignment(dataset: CalorimeterSimDataset) -> None:
 
 
 
-def compute_basis(dataset: CalorimeterSimDataset) -> None: 
+def compute_basis(dataset: CaloSimDataset) -> None: 
 
     """
     Construct an orthonormal local coordinate basis aligned with the
@@ -210,7 +225,7 @@ def compute_basis(dataset: CalorimeterSimDataset) -> None:
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset containing incident particle spherical coordinates.
 
     Requires
@@ -303,7 +318,9 @@ def _check_basis(basis, tol=1e-6):
     return unit_length, orthogonal
 
 
-def project_coordinates(dataset: CalorimeterSimDataset, inverse: bool = False) -> None:
+# check this
+
+def project_coordinates(dataset: CaloSimDataset, inverse: bool = False) -> None:
 
     """
     Project Cartesian coordinates into a shower-centric basis,
@@ -311,7 +328,7 @@ def project_coordinates(dataset: CalorimeterSimDataset, inverse: bool = False) -
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset containing either Cartesian coordinates or projected coordinates.
     inverse : bool, default=False
         If False, projects (x, y, z) → (x_hat, y_hat, z_hat).
@@ -353,7 +370,7 @@ def project_coordinates(dataset: CalorimeterSimDataset, inverse: bool = False) -
 
     """
 
-    _, counts = np.unique(dataset.data["eid"], return_counts=True)
+    _, counts = np.unique(dataset.data["idx"], return_counts=True) # likely this?
     basis = np.repeat(dataset.meta["basis"], counts, axis=0)
 
     if not inverse:
@@ -382,16 +399,16 @@ def project_coordinates(dataset: CalorimeterSimDataset, inverse: bool = False) -
 
 
 
-def compute_retention(dataset: CalorimeterSimDataset, box_size: int) -> None:
+def compute_retention(dataset: CaloSimDataset, box_size: int) -> None:
     
     """
     Compute step retention per event after applying an XY geometric cut.
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset. Must include:
-        - dataset.data["eid"]
+        - dataset.data["idx"]
         - dataset.data["x_hat"]
         - dataset.data["y_hat"]
 
@@ -403,7 +420,7 @@ def compute_retention(dataset: CalorimeterSimDataset, box_size: int) -> None:
 
     Requires
     --------
-    dataset.data["eid"]
+    dataset.data["idx"]
     dataset.data["x_hat"], dataset.data["y_hat"]
 
     Mutates
@@ -418,13 +435,20 @@ def compute_retention(dataset: CalorimeterSimDataset, box_size: int) -> None:
     - This metric is step-based, not energy-weighted.
     """
     
-    _, steps_before = np.unique(dataset.data["eid"], return_counts=True)
+    _, steps_before = np.unique(dataset.data["idx"], return_counts=True)
+
+
+
+
     data_filtered = filter_by_xy_box(dataset.data, box_size)
 
-    eids, steps_after = np.unique(data_filtered["eid"], return_counts=True)
+
+
+
+    idxs, steps_after = np.unique(data_filtered["idx"], return_counts=True)
 
     steps_after_full = np.zeros(len(steps_before))
-    steps_after_full[eids] = steps_after
+    steps_after_full[idxs] = steps_after
     retention_pct = steps_after_full/steps_before*100 
 
     dataset.meta["retention_pct"] = retention_pct
@@ -432,14 +456,14 @@ def compute_retention(dataset: CalorimeterSimDataset, box_size: int) -> None:
 
 
 
-def compute_transverse_radius(dataset: CalorimeterSimDataset) -> None:
+def compute_transverse_radius(dataset: CaloSimDataset) -> None:
 
     """
     Compute transverse radial distance in projected shower-centric coordinate system.
 
     Parameters
     ----------
-    dataset : CalorimeterSimDataset
+    dataset : CaloSimDataset
         Dataset containing projected coordinates.
 
     Requires
@@ -456,3 +480,260 @@ def compute_transverse_radius(dataset: CalorimeterSimDataset) -> None:
     y_hat = dataset.data["y_hat"]
     r_hat = np.sqrt(x_hat**2 + y_hat**2)
     dataset.data["r_hat"] = r_hat
+
+
+@dataclass(frozen=True)
+class DetectorGeometry:
+    # barrel (mm)
+    r_barrel_inner: float = 1250
+    r_barrel_outer: float = 1500
+    z_barrel_min: float = 0
+    z_barrel_max: float = 3050
+
+    # endcap (mm)
+    r_endcap_inner: float = 315
+    r_endcap_outer: float = 1500
+    z_endcap_min: float = 3200
+    z_endcap_max: float = 3450
+
+
+
+def classify_impact_regions(theta, geometry):
+
+    """
+    Classify detector entry region from indicent particle direction.
+
+    Parameters
+    ----------
+    theta : np.ndarray
+    geometry : DetectorGeometry
+        Detector geometry definition.
+
+    Returns
+    -------
+    in_barrel : np.ndarray
+        Boolean mask for particles entering through the barrel surface.
+    in_endcap_front : np.ndarray
+        Boolean mask for particles entering through the endcap front face.
+    in_endcap_inner : np.ndarray
+        Boolean mask for particles entering through the endcap inner radius.
+
+    Method
+    ------
+    1. Fold detector symmetry around pi/2:
+       theta -> min(theta, pi - theta)
+
+    2. Compute transition angles:
+       theta_1 = atan(r_barrel_inner / z_barrel_max)
+       theta_2 = atan(r_endcap_inner / z_endcap_min)
+
+    3. Classify each trajectory according to the first detector
+       surface intersected by the particle.
+
+    """
+
+    # change arctan to atan
+
+    theta_1 = np.atan(geometry.r_barrel_inner / geometry.z_barrel_max) # from barrel to endcap front
+    theta_2 = np.atan(geometry.r_endcap_inner / geometry.z_endcap_min) # from endcap front to endcap inner surface
+
+    in_barrel = theta >= theta_1
+    in_endcap_front = (theta >= theta_2) & (theta < theta_1)
+    in_endcap_inner = theta < theta_2
+
+    return in_barrel, in_endcap_front, in_endcap_inner
+
+
+# check this
+
+def compute_detector_distances(dataset: CaloSimDataset) -> None:
+
+    """
+    Compute detector entry and exit distances along the incident particle trajectory.
+
+    Parameters
+    ----------
+    dataset : CaloSimDataset
+    geometry : DetectorGeometry
+        Detector geometry definition.
+
+    Requires
+    --------
+    dataset.meta["theta"]
+        Incident particle polar angle (radians).
+
+    Mutates
+    -------
+    dataset.meta["entry_dist"]
+        Distance from the origin to the detector entry surface (mm).
+    dataset.meta["exit_dist"]
+        Distance from the origin to the detector exit surface (mm).
+
+    Notes
+    -----
+    Numerical stability is ensured near theta = pi/2 by avoiding
+    division by very small cosine values.
+    """
+
+    geometry = DetectorGeometry()
+    theta = dataset.meta["theta"]
+    theta = np.abs(theta)
+    theta = np.where(theta > np.pi / 2, np.pi - theta, theta)
+
+    in_barrel, in_endcap_front, in_endcap_inner = classify_impact_regions(theta, geometry)
+
+    entry = np.zeros_like(theta)
+
+    entry[in_barrel] = geometry.r_barrel_inner / np.sin(theta[in_barrel])
+    entry[in_endcap_front] = geometry.z_endcap_min / np.cos(theta[in_endcap_front])
+    entry[in_endcap_inner] = geometry.r_endcap_inner / np.sin(theta[in_endcap_inner])
+
+    dataset.meta["entry_dist"] = entry
+
+    eps = 1e-7
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+
+    barrel_exit = geometry.r_barrel_outer / sin_theta
+    endcap_exit = np.full_like(theta, np.inf)
+
+    valid = np.abs(cos_theta) >= eps
+    endcap_exit[valid] = geometry.z_endcap_max / cos_theta[valid]
+
+    dataset.meta["exit_dist"] = np.minimum(barrel_exit, endcap_exit)
+
+
+
+# check this
+
+def shift_z_hat(dataset: CaloSimDataset, inverse: bool = False) -> None:
+
+
+    """
+    Shift longitudinal coordinates relative to the detector entry point.
+
+    Parameters
+    ----------
+    dataset : CaloSimDataset
+    inverse : bool, default=False
+        If False, shift coordinates such that the detector entry point is
+        located at z_hat = 0. If True, restore the original coordinates.
+
+    Requires
+    --------
+    dataset.data["z_hat"]
+    dataset.data["idx"]
+    dataset.meta["entry_dist"]
+
+    Mutates
+    -------
+    dataset.data["z_hat"]
+
+    """
+    z_hat = dataset.data["z_hat"]
+    idxs = dataset.data["idx"]
+
+    dist = dataset.meta["entry_dist"][idxs]
+
+    sign = 1 if inverse else -1
+    z_hat = z_hat + sign * dist
+    dataset.data["z_hat"] = z_hat
+
+
+def compute_energy_sum(dataset: CaloSimDataset) -> None:
+
+    """
+    Compute total deposited energy per event.
+
+    Parameters
+    ----------
+    dataset : CaloSimDataset
+
+    Requires
+    --------
+    dataset.data["e"]
+    dataset.data["eid"]
+
+    Mutates
+    -------
+    dataset.meta["e_sum"]
+        Total deposited energy for each event.
+
+    """
+
+    e = dataset.data["e"]
+    idxs = dataset.data["idx"]
+
+    dataset.meta["e_sum"] = np.bincount(idxs, weights=e)
+
+
+
+def compute_geometric_features(dataset: CaloSimDataset, inverse: bool = False) -> None:
+
+    """
+    Compute or reconstruct geometric features.
+
+    Parameters
+    ----------
+    dataset : CaloSimDataset
+    inverse : bool, default=False
+        If False, compute derived geometric features from incident
+        particle kinematics. If True, reconstruct global coordinates
+        from transformed coordinates.
+
+    Requires
+    --------
+    Forward mode:
+        dataset.meta["p_x"], ["p_y"], ["p_z"]
+        dataset.data["x"], ["y"], ["z"]
+
+    Inverse mode:
+        dataset.meta["theta"], ["phi"]
+        dataset.data["x_hat"], ["y_hat"], ["z_hat"]
+
+    Mutates
+    -------
+    Forward mode:
+        dataset.meta["theta"]
+        dataset.meta["phi"]
+        dataset.meta["e_inc"]
+        dataset.meta["basis"]
+        dataset.meta["entry_dist"]
+        dataset.meta["exit_dist"]
+
+        dataset.data["x_hat"]
+        dataset.data["y_hat"]
+        dataset.data["z_hat"]
+        dataset.data["r_hat"]
+
+    Inverse mode:
+        dataset.data["x"]
+        dataset.data["y"]
+        dataset.data["z"]
+        dataset.meta["basis"]
+
+        dataset.meta["x_c"]
+        dataset.meta["y_c"]
+        dataset.meta["z_c"]
+        dataset.meta["ang_misalign"]
+        dataset.meta["pos_misalign"]
+    """
+
+
+    if not inverse:
+        compute_spherical_coords(dataset) 
+        compute_incident_energy(dataset)
+        compute_basis(dataset)
+        compute_detector_distances(dataset)
+        project_coordinates(dataset)
+        shift_z_hat(dataset)
+        compute_transverse_radius(dataset)
+
+    else:
+        dataset.data["d"] = np.repeat(str(0), len(dataset.data["eid"])) # change this 
+        compute_basis(dataset)
+        shift_z_hat(dataset, inverse=True)
+        project_coordinates(dataset, inverse=True)
+        shift_z_hat(dataset)
+        compute_centroids(dataset)
+        compute_misalignment(dataset)

@@ -41,8 +41,10 @@ data_loader:
   num_files: 1
   standardize_vars: ["e_log_norm", "e_sqrt_norm", "e_inc_norm"]
   transforms: *TRANSFORMS
-  struc: "grouped"
-  collate: 
-    mode: "sparse"
+
+
+  data_view: "event"
+  batch_mode: 
+    name: "sparse"
 
 

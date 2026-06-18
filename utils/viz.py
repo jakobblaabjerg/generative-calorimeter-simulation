@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np 
-from src.data_processing import filter_by_eid, filter_by_xy_box
+from src.processing import filter_by_eid, filter_by_xy_box
 
 
 def plot_hist(data, var, bins=200):
