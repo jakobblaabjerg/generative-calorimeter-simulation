@@ -45,7 +45,7 @@ class CaloSimDataset:
 
     def expand(self):
 
-        _, num_points = np.unique(self.data, return_counts=True)
+        _, num_points = np.unique(self.data["idx"], return_counts=True)
         self.meta["num_points"] = num_points
 
         for key in self.meta.keys():

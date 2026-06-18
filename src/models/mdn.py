@@ -134,8 +134,6 @@ class MixtureDensityNetworkV1(BaseMDN):
         if self.add_jacobian and self.z_hat_jacobian is not None:
             log_jacobian += self.z_hat_jacobian(x[:, self.idx_z_hat])
 
-        log_jacobian = log_jacobian.sum(dim=1)
-
         z = z.unsqueeze(1).expand(-1, self.k, -1)  # (batch, k, point_dim)
         
         # gaussian log probability
