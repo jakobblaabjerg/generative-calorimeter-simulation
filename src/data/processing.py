@@ -1,8 +1,8 @@
 from src.utils import filter_dict
 from src.io import load_data, get_file_names, save_data
 from src.geometry import compute_geometric_features
-from src.filters import apply_filter, FILTER_REGISTRY
-from src.transforms import normalize_data
+from src.data.filters import apply_filter, FILTER_REGISTRY
+from src.data.transforms import normalize_data, standardize_data
 from src.calosim import CaloSimDataset
 from src.statistics import DatasetStats
 from src.reporting import FilterReport, DatasetReport
@@ -355,20 +355,31 @@ class DatasetBuilder:
         return datasets
 
 
+def postprocess(dataset, stats, cfg_filters, standardize_vars):
+
+    standardize_data(dataset, stats, standardize_vars, inverse=True)
+    normalize_data(dataset, cfg_filters, inverse=True)
+    compute_geometric_features(dataset, inverse=True)
 
 
 
-class DataPostprocessor:
-    def __init__(self):
-        pass
 
 
 
 
-
-
+# def get_file_idx(file_name):
+#     return int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
 
     
+#     def inverse_transform(self, output, stats, standardize_vars):
+
+#         standardize_data(output["data"], stats, standardize_vars, inverse=True)
+#         standardize_data(output["meta"], stats, standardize_vars, inverse=True)
+
+#         normalize_data(output["data"], output["meta"], self.cfg, inverse=True)
+#         compute_static_features(output["data"], output["meta"], inverse=True)
+
+        
 
 
 # # utils
@@ -439,16 +450,3 @@ class DataPostprocessor:
 
 
 
-# def get_file_idx(file_name):
-#     return int(''.join(c for c in os.path.splitext(file_name)[0] if c.isdigit()))
-
-    
-#     def inverse_transform(self, output, stats, standardize_vars):
-
-#         standardize_data(output["data"], stats, standardize_vars, inverse=True)
-#         standardize_data(output["meta"], stats, standardize_vars, inverse=True)
-
-#         normalize_data(output["data"], output["meta"], self.cfg, inverse=True)
-#         compute_static_features(output["data"], output["meta"], inverse=True)
-
-        
