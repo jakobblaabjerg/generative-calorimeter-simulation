@@ -2,7 +2,7 @@ from . import cfm
 from . import mdn
 from . import encoders
 
-from models.registry import MODEL_REGISTRY, ENCODER_REGISTRY
+from .registry import MODEL_REGISTRY, ENCODER_REGISTRY
 
 
 print(MODEL_REGISTRY)
