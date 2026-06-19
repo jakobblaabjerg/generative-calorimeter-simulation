@@ -1,11 +1,12 @@
 from src.config import load_config
-from src.models.utils import create_model
+
+from src.models.factory import create_model
 from src.io import load_stats
-from src.datasets import create_loader
+from src.data.datasets import create_loader
 from src.utils import set_seed, synchronize_cuda
 
 from .loops import run_epoch
-from .generation import generate_samples
+from .sampling import generate_samples
 
 from tqdm import tqdm
 import time
@@ -82,7 +83,7 @@ def evaluate_quality(model, cfg, split, num_mc_samples, seed):
 
 def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed):
 
-    device = cfg_sampling.device
+    device = torch.device(cfg_sampling.device)
     model.to(device)
 
     stats = load_stats(load_dir=data_dir)
