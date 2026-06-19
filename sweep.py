@@ -27,7 +27,7 @@ def main():
         "trainer.epochs": args.epochs,
         "data_loader.load_dir": args.data_dir,
         "data_loader.num_files": args.num_files,
-        "loggger.log_dir": args.log_dir
+        "logger.log_dir": args.log_dir
     }
 
     override_config(cfg_base, overrides)
