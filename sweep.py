@@ -9,7 +9,7 @@ def main():
     parser.add_argument("--encoder", type=str, default=None)
     parser.add_argument("--trials", type=int, required=True)
     parser.add_argument("--space", type=str, default=None)
-    parser.add_argument("--samples", type=int, default=1)
+    parser.add_argument("--mc_samples", type=int, default=1)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
@@ -31,7 +31,7 @@ def main():
         cfg=cfg_base, 
         search_space=search_space, 
         num_trials=args.trials, 
-        num_samples=args.samples, 
+        num_mc_samples=args.mc_samples, 
         debug=args.debug
         )
 
