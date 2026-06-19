@@ -1,6 +1,6 @@
 from src.logger import setup_logger
 from src.config import sample_config
-from src.models.utils import create_model
+from src.models.factory import create_model
 
 from .evaluation import evaluate_quality, evaluate_complexity
 from .trainer import run_train

@@ -1,5 +1,5 @@
 from src.config import load_config, get_search_space
-from src.trainer import run_sweep
+from src.training.trainer import run_sweep
 import argparse
 
 def main():
