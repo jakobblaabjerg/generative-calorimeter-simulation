@@ -5,9 +5,6 @@ from . import encoders
 from .registry import MODEL_REGISTRY, ENCODER_REGISTRY
 
 
-print(MODEL_REGISTRY)
-print(ENCODER_REGISTRY)
-
 def create_model(config):
     return MODEL_REGISTRY[config.name](config.model)
 
