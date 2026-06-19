@@ -1,5 +1,6 @@
 from src.config import load_config, get_search_space
 from src.training.sweep import run_sweep
+from src.config import override_config
 import argparse
 
 def main():
@@ -10,10 +11,27 @@ def main():
     parser.add_argument("--trials", type=int, required=True)
     parser.add_argument("--space", type=str, default=None)
     parser.add_argument("--mc_samples", type=int, default=1)
+    parser.add_argument("--patience", type=int, default=None)
+    parser.add_argument("--epochs", type=int, default=None)    
+    parser.add_argument("--log_dir", type=str, default=None)
+    parser.add_argument("--data_dir", type=str, default=None)
+    parser.add_argument("--num_files", type=int, default=None)    
     parser.add_argument("--debug", action="store_true")
+
     args = parser.parse_args()
 
     cfg_base = load_config(f"configs/base_{args.model}.yaml")
+
+    overrides = {
+        "trainer.patience": args.patience,
+        "trainer.epochs": args.epochs,
+        "data_loader.load_dir": args.data_dir,
+        "data_loader.num_files": args.num_files,
+        "loggger.log_dir": args.log_dir
+    }
+
+    override_config(cfg_base, overrides)
+
 
     # optional encoder
     if args.encoder and args.model == "cfm":
