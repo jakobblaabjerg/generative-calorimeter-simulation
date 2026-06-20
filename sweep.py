@@ -16,7 +16,6 @@ def main():
     parser.add_argument("--log_dir", type=str, default=None)
     parser.add_argument("--data_dir", type=str, default=None)
     parser.add_argument("--num_files", type=int, default=None)    
-    parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
 
@@ -50,7 +49,6 @@ def main():
         search_space=search_space, 
         num_trials=args.trials, 
         num_mc_samples=args.mc_samples, 
-        debug=args.debug
         )
 
 
