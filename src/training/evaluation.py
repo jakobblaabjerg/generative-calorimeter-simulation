@@ -71,13 +71,13 @@ def evaluate_quality(model, cfg, split, num_mc_samples, seed):
     loader = create_loader(split=split, **vars(cfg.data_loader))
     losses = []
 
-    iterator = tqdm(range(num_mc_samples), leave=False)
+    iterator = tqdm(range(num_mc_samples), leave=False)  # creates 2 iterators
 
     for i in iterator:
         if seed is not None:
             set_seed(seed=seed+i)
-        loss, _ = run_epoch(model, loader)
-        losses.append(loss)
+        loss = run_epoch(model, loader) 
+        losses.append(sum(loss))
 
     return compute_mean_std(values=losses, prefix="loss")
 
