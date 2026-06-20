@@ -66,14 +66,14 @@ class Trainer:
         self.early_stopping = EarlyStopping(patience)
 
 
-    def validate(self, val_loader, debug=False):
+    def validate(self, val_loader, seed=None):
 
-        if debug:
+        if seed is not None:
             # remember current state
             state_cpu = torch.random.get_rng_state()
             state_cuda = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
             
-            set_seed() # this is the problem !?
+            set_seed(seed) 
             loss_val = run_epoch(self.model, val_loader) 
 
             # restore state
@@ -87,7 +87,7 @@ class Trainer:
         return loss_val
 
 
-    def fit(self, train_loader, val_loader=None, debug=False):
+    def fit(self, train_loader, val_loader=None, seed=None):
 
         for epoch in range(self.epochs):
             
@@ -98,7 +98,7 @@ class Trainer:
 
             if val_loader is not None:
 
-                loss_val = self.validate(val_loader, debug)
+                loss_val = self.validate(val_loader, seed)
                 self.log_metrics(loss_val, epoch, tag="val")                
                 
                 if self.early_stopping.step(sum(loss_val)):
@@ -131,7 +131,7 @@ class Trainer:
 
     
 
-def run_train(cfg, debug=False):
+def run_train(cfg, seed=None):
 
     print("Loading configuration")
     logger = Logger(**vars(cfg.logger))
@@ -153,4 +153,4 @@ def run_train(cfg, debug=False):
 
     print("Starting training")
     trainer = Trainer(model, optimizer, run_dir, **vars(cfg.trainer))
-    trainer.fit(train_loader, val_loader, debug=debug)
+    trainer.fit(train_loader, val_loader, seed)
