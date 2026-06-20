@@ -73,7 +73,7 @@ class Trainer:
             state_cpu = torch.random.get_rng_state()
             state_cuda = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
             
-            set_seed()
+            set_seed() # this is the problem !?
             loss_val = run_epoch(self.model, val_loader) 
 
             # restore state

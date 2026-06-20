@@ -9,9 +9,10 @@ import torch
 import pandas as pd
 
 
-def run_sweep(cfg, search_space, num_trials, num_mc_samples, debug=False):
+def run_sweep(cfg, search_space, num_trials, num_mc_samples):
     
     leaderboard = []
+    seed = 123
 
     log_dir = cfg.logger.log_dir
     logger = setup_logger(name="sweep_log", save_dir=log_dir)
@@ -23,7 +24,7 @@ def run_sweep(cfg, search_space, num_trials, num_mc_samples, debug=False):
         
         try:
             cfg_version, params = sample_config(cfg, search_space)
-            run_train(cfg_version, debug=debug)
+            run_train(cfg_version, seed)
 
         except Exception as e:
             run_dir = getattr(cfg_version, "run_dir", None) if cfg_version else None
@@ -49,7 +50,7 @@ def run_sweep(cfg, search_space, num_trials, num_mc_samples, debug=False):
             cfg=cfg, 
             split="test", 
             num_mc_samples=num_mc_samples, 
-            seed=123
+            seed=seed
         )
         metrics.update(metrics_quality)
 
