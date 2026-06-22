@@ -4,6 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 import torch
+import math
 
 from src.utils import set_seed
 from src.logger import Logger
@@ -96,13 +97,10 @@ class Trainer:
             self.log_metrics(loss_train, epoch, tag="train", log_histograms=False)
 
 
-            if not torch.isfinite(sum(loss_train)):
-
+            if math.isnan(sum(loss_train)):
                 raise RuntimeError(
-                    f"Loss is {loss_train.item()}"
-                )
-
-
+                    f"Loss is NaN"
+                    )
             if val_loader is not None:
 
                 loss_val = self.validate(val_loader, seed)
