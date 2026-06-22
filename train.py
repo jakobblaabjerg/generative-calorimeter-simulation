@@ -19,7 +19,6 @@ def main():
     parser.add_argument("--log_dir", type=str, default=None)
     parser.add_argument("--data_dir", type=str, default=None)
     parser.add_argument("--num_files", type=int, default=None)
-    parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
 
@@ -44,7 +43,7 @@ def main():
     }
 
     override_config(cfg, overrides)
-    run_train(cfg=cfg, debug=args.debug)
+    run_train(cfg=cfg, seed=None)
 
 
 
