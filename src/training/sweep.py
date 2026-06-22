@@ -47,8 +47,8 @@ def run_sweep(cfg, search_space, num_trials, num_mc_samples):
 
         metrics_quality = evaluate_quality(
             model=model, 
-            cfg=cfg, 
-            split="test", 
+            cfg=cfg_version, 
+            split="val", 
             num_mc_samples=num_mc_samples, 
             seed=seed
         )

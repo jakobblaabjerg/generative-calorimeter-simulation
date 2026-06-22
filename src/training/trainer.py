@@ -96,6 +96,13 @@ class Trainer:
             self.log_metrics(loss_train, epoch, tag="train", log_histograms=False)
 
 
+            if not torch.isfinite(sum(loss_train)):
+
+                raise RuntimeError(
+                    f"Loss is {loss_train.item()}"
+                )
+
+
             if val_loader is not None:
 
                 loss_val = self.validate(val_loader, seed)
