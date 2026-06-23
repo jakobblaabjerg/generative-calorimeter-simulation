@@ -1,5 +1,5 @@
 import argparse
-from src.trainer import run_eval
+from src.training.evaluation import run_eval
 from src.config import load_config
 import os
 import json 
