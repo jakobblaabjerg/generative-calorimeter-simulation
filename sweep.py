@@ -7,6 +7,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--encoder", type=str, default=None)
     parser.add_argument("--trials", type=int, required=True)
     parser.add_argument("--space", type=str, default=None)
@@ -19,7 +20,7 @@ def main():
 
     args = parser.parse_args()
 
-    cfg_base = load_config(f"configs/base_{args.model}.yaml")
+    cfg_base = load_config(f"configs/{args.dataset}/models/{args.model}/base_{args.model}.yaml")
 
     overrides = {
         "trainer.patience": args.patience,
