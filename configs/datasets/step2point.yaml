@@ -1,0 +1,38 @@
+name: step2point
+normalize: True
+keepvars: ["x_hat", "y_hat", "z_hat", "r_hat", "theta", "phi", "e", "e_inc", "eid", "idx", "t"]  
+split_ratios: [0.8, 0.1, 0.1]
+filters: ["time", "energy", "subdet", "z_hat", "misalignment", "retention", "xy_box", "aggregate"]   
+
+filter_params:
+  time:
+    threshold: 200
+  misalignment:
+    threshold: 6
+    method: "ang"
+  z_hat:
+    threshold: 0 
+  retention:
+    box_size: &box_size 150
+    threshold: 90
+  xy_box:
+    box_size: *box_size
+  energy:
+    threshold: 0.00001
+  subdet:
+    subdets: ["ECalBarrelCollection", "ECalEndcapCollection"]
+
+
+
+
+
+  
+  
+  
+
+
+
+
+
+
+
