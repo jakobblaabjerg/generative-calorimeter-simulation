@@ -88,7 +88,7 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed
 
     stats = load_stats(load_dir=data_dir)
     standardize_vars = cfg.data_loader.standardize_vars
-    loader = create_loader(
+    loader = create_loader(                 # very ugly need batch mode now 
         standardize_vars=standardize_vars, 
         stats=stats,
         **vars(cfg_sampling.data_loader)
@@ -104,12 +104,12 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed
 
         synchronize_cuda(device)
         start = time.time()
-        generate_samples(model, loader, device, return_outputs=False)
+        generate_samples(model, loader, return_outputs=False)
         synchronize_cuda(device)
         end = time.time()
         times.append(end-start)
 
-    return compute_mean_std(values=times, predix="time")
+    return compute_mean_std(values=times, prefix="time")
 
 def compute_mean_std(values, prefix=""):
 

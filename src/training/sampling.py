@@ -17,7 +17,7 @@ def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
 
     device = torch.device(cfg_sampling.device)
     model = create_model(cfg_version)
-    model.load_checkpoint(cfg_version.run_dir, model, device)
+    model.load_checkpoint(model_dir) # changed from run dir
     model.to(device)
 
 
@@ -33,7 +33,7 @@ def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
             stats=stats, 
             **vars(cfg_sampling.data_loader)
             )
-                
+                  
         dataset = generate_samples(model, loader)
         postprocess(dataset, stats, cfg_filters, standardize_vars)
         save_data(dataset, save_dir, stage="sampled", file_idx=i+1)
