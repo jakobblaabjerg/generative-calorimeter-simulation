@@ -1,0 +1,5 @@
+name: sequence
+max_seq_len: 10000
+output_size: 128
+cell_type: "lstm"
+use_cond: True
