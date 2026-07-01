@@ -44,8 +44,9 @@ class BaseMDN(BaseModel):
             self.z_hat_jacobian = create_jacobian(cfg.transforms.z_hat)
             self.e_jacobian = create_jacobian(cfg.transforms.e)
 
-        self.x_vars, self.z_vars, self.c_vars = create_var_names(cfg.transforms, cfg.spherical)
+        self.x_vars, self.z_vars, self.c_vars = create_var_names(cfg.input_vars, cfg.transforms)
         self.point_dim = len(self.z_vars)
+        self.cond_dim = len(self.c_vars)
 
         self.idx_e = self.x_vars.index("e")
         self.idx_z_hat = self.x_vars.index("z_hat")
@@ -97,7 +98,7 @@ class MixtureDensityNetworkV1(BaseMDN):
         self.mlp = MLP(
             hidden_layers=cfg.mlp.hidden_layers, 
             layer_norm=cfg.mlp.layer_norm, 
-            input_size=cfg.cond_dim, 
+            input_size=self.cond_dim, 
             output_size=1+self.k*(2*self.point_dim+1), 
             activation=cfg.mlp.activation
             )
@@ -215,15 +216,15 @@ class MixtureDensityNetworkV2(BaseMDN):
         self.mlp = MLP(
             hidden_layers=cfg.mlp.hidden_layers, 
             layer_norm=cfg.mlp.layer_norm, 
-            input_size=cfg.cond_dim, 
-            output_size=cfg.mdn_head.input_size,
+            input_size=self.cond_dim, 
+            output_size=cfg.mlp.output_size,
             activation=cfg.mlp.activation
             )
 
         self.poisson_head = MLP(
             hidden_layers=cfg.poisson_head.hidden_layers,
             layer_norm=cfg.poisson_head.layer_norm,
-            input_size=cfg.mdn_head.input_size,
+            input_size=cfg.mlp.output_size,
             output_size=1,
             activation=cfg.mlp.activation
         )
@@ -231,7 +232,7 @@ class MixtureDensityNetworkV2(BaseMDN):
         self.mdn_head = MLP(
             hidden_layers=cfg.mdn_head.hidden_layers,
             layer_norm=cfg.mdn_head.layer_norm,
-            input_size=cfg.mdn_head.input_size,
+            input_size=cfg.mlp.output_size,
             output_size=self.k*(2*self.point_dim+1),
             activation=cfg.mlp.activation
         )

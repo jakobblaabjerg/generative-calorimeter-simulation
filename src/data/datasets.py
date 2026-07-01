@@ -9,6 +9,7 @@ from src.calosim import CaloSimDataset
 from .collate import COLLATE_REGISTRY
 from .transforms import standardize_data, normalize_meta
 
+
 class BaseTorchDataset(torch.utils.data.Dataset):
 
     def __init__(
@@ -17,7 +18,7 @@ class BaseTorchDataset(torch.utils.data.Dataset):
             load_dir,
             num_files,
             transforms,
-            spherical,
+            input_vars,
             standardize_vars,
             ):
 
@@ -25,14 +26,14 @@ class BaseTorchDataset(torch.utils.data.Dataset):
 
         self.dataset, self.stats = load_split(split, load_dir, num_files)
         standardize_data(self.dataset, self.stats, standardize_vars) 
-        self.x_vars, self.z_vars, self.c_vars = create_var_names(transforms, spherical)
+        self.x_vars, self.z_vars, self.c_vars = create_var_names(input_vars, transforms)
 
 
     def create_collate_fn(self, name):
         return None
 
 
-def create_var_names(transforms, spherical):
+def create_var_names(input_vars, transforms):
 
     """
     Create feature variable names used as model inputs and targets.
@@ -51,14 +52,9 @@ def create_var_names(transforms, spherical):
         Input variables (x_vars), transformed target variables (z_vars),
         and conditioning variables (c_vars).
     """
-
-    if spherical:
-        x_vars = ["r_hat", "z_hat", "e"]
-    else:
-        x_vars = ["x_hat", "y_hat", "z_hat", "e"]
-
+    x_vars = input_vars.x_vars
+    c_vars = input_vars.c_vars
     z_vars = [to_z_name(var, getattr(transforms, var, None)) for var in x_vars]
-    c_vars = ["dir_x_norm", "dir_y_norm", "dir_z_norm", "e_inc_norm"]
     
     return x_vars, z_vars, c_vars
 
@@ -103,12 +99,12 @@ class EventTorchDataset(BaseTorchDataset):
             load_dir, 
             num_files, 
             transforms, 
-            spherical, 
+            input_vars, 
             standardize_vars,
             sort_by_time=False,
             ):
         
-        super().__init__(split, load_dir, num_files, transforms, spherical, standardize_vars)
+        super().__init__(split, load_dir, num_files, transforms, input_vars, standardize_vars)
 
         if sort_by_time:
             self.sort_by_time()
@@ -174,11 +170,11 @@ class PointTorchDataset(BaseTorchDataset):
             load_dir, 
             num_files, 
             transforms, 
-            spherical, 
+            input_vars, 
             standardize_vars,
             ):
         
-        super().__init__(split, load_dir, num_files, transforms, spherical, standardize_vars)
+        super().__init__(split, load_dir, num_files, transforms, input_vars, standardize_vars)
         
         
         self.dataset.expand()      

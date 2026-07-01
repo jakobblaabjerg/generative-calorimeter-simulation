@@ -4,7 +4,7 @@ from src.io import load_stats, save_data
 from src.data.datasets import create_loader
 from src.calosim import CaloSimDataset
 from src.utils import move_to_device
-from src.data.processing import postprocess
+from src.processing import postprocess_data
 
 
 from tqdm import tqdm
@@ -35,8 +35,8 @@ def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
             )
                   
         dataset = generate_samples(model, loader)
-        postprocess(dataset, stats, cfg_filters, standardize_vars)
-        save_data(dataset, save_dir, stage="sampled", file_idx=i+1)
+        postprocess_data(dataset, stats, cfg_filters, standardize_vars)
+        save_data(dataset, save_dir, stage="sampled", file_name=f"file_{i+1}")
 
     print("Finished sampling")
 

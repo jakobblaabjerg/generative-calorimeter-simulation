@@ -28,11 +28,11 @@ class ConditionalFlowMatching(BaseModel):
         self.num_steps = cfg.num_steps
 
         # variable names for z and c
-        _, self.z_vars, self.c_vars = create_var_names(cfg.transforms, cfg.spherical) 
+        _, self.z_vars, self.c_vars = create_var_names(cfg.input_vars, cfg.transforms)
 
         # input dimensions 
         self.point_dim = len(self.z_vars)
-        self.cond_dim = cfg.cond_dim
+        self.cond_dim = len(self.c_vars)
         
         # neural nets        
         self.cfg_encoder = cfg.encoder
