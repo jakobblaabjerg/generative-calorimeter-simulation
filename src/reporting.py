@@ -34,13 +34,13 @@ class DatasetReport:
         self.reports.append(report)
 
 
-    def write(self, save_dir, file_idx):
+    def write(self, save_dir, file_name):
 
-        file_path = os.path.join(save_dir, f"file{file_idx}_summary.txt")
+        file_path = os.path.join(save_dir, f"{file_name}_summary.txt")
 
         with open(file_path, "w") as f:
 
-            f.write(f"Dataset name: {file_idx}\n")
+            f.write(f"Dataset name: {file_name}\n")
             f.write("="*40+"\n\n")
 
             for r in self.reports:

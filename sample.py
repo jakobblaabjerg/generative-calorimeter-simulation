@@ -1,5 +1,5 @@
 from src.config import override_config, load_config
-from src.trainer import run_sampling
+from src.training.sampling import run_generation
 
 import argparse
 
@@ -30,7 +30,7 @@ def main():
     cfg_sampling = load_config(args.config_sampling)
     override_config(cfg_sampling, overrides)
 
-    run_sampling(
+    run_generation(
         model_dir=args.model_dir,
         data_dir=args.data_dir,
         save_dir=args.save_dir,

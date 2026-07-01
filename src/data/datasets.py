@@ -249,6 +249,7 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         theta, 
         e_inc,
         seed,
+        split=None
         ):
 
         super().__init__()
@@ -258,7 +259,7 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         standardize_data(self.dataset, stats, standardize_vars)
 
     def __len__(self):
-        return self.dataset.num_events
+        return len(self.dataset.meta["e_inc"]) # change this to something better
 
     def __getitem__(self, idx):
 
@@ -271,6 +272,10 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         c = torch.from_numpy(c) # (4,)
 
         return c
+
+    def create_collate_fn(self, name):
+        return None
+
 
     
 def create_meta(num_samples: int, phi: float, theta: float, e_inc: float, seed=None):
@@ -311,7 +316,7 @@ def create_meta(num_samples: int, phi: float, theta: float, e_inc: float, seed=N
             meta[key] = u * (max_val - min_val) + min_val
         else:
             meta[key] = np.repeat(val, num_samples).astype(np.float32)
-    
+   
     return CaloSimDataset(meta=meta)
 
 
@@ -319,7 +324,7 @@ def create_meta(num_samples: int, phi: float, theta: float, e_inc: float, seed=N
 def create_loader(batch_size: int, data_view: str, batch_mode: dict | None = None, split: str = None, **kwargs):
 
     dataset_cls = DATASET_REGISTRY[data_view]
-    dataset = dataset_cls(split, **kwargs)
+    dataset = dataset_cls(split=split, **kwargs)
 
     batch_mode = batch_mode or {}
     collate_fn = dataset.create_collate_fn(**vars(batch_mode))

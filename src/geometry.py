@@ -730,10 +730,11 @@ def compute_geometric_features(dataset: CaloSimDataset, inverse: bool = False) -
         compute_transverse_radius(dataset)
 
     else:
-        dataset.data["d"] = np.repeat(str(0), len(dataset.data["eid"])) # change this 
+        dataset.data["subdet"] = np.repeat(str(0), len(dataset.data["idx"]))
         compute_basis(dataset)
         shift_z_hat(dataset, inverse=True)
         project_coordinates(dataset, inverse=True)
         shift_z_hat(dataset)
         compute_centroids(dataset)
         compute_misalignment(dataset)
+        compute_transverse_radius(dataset)

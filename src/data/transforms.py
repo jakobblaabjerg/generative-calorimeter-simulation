@@ -17,37 +17,70 @@ def standardize_data(dataset, stats, standardize_vars, inverse=False):
             else:
                 container[var] = (container[var] - mean) / std
 
-
-def normalize_meta(dataset, inverse):
+def normalize_e_inc(dataset, inverse):
 
     if not inverse:
+        
+        required = {"e_inc"}
+        if not required <= dataset.meta.keys():
+            return
+        
         dataset.meta["e_inc_norm"] = np.log1p(dataset.meta["e_inc"])
+    else:
+
+        required = {"e_inc_norm"}
+        if not required <= dataset.meta.keys():
+            return        
+        
+        dataset.meta["e_inc"] = np.expm1(dataset.meta["e_inc_norm"])
+
+def normalize_direction(dataset, inverse):
+
+    if not inverse:
+
+        required = {"theta", "phi"}
+        if not required <= dataset.meta.keys():
+            return
+
         theta = dataset.meta["theta"]
         phi = dataset.meta["phi"]
         dataset.meta["dir_x_norm"] = np.sin(theta) * np.cos(phi)
         dataset.meta["dir_y_norm"] = np.sin(theta) * np.sin(phi)
         dataset.meta["dir_z_norm"] = np.cos(theta)
-    
+
     else:
-        dataset.meta["e_inc"] = np.expm1(dataset.meta["e_inc_norm"])
+
+        required = {"dir_x_norm", "dir_y_norm", "dir_z_norm"}
+        if not required <= dataset.meta.keys():
+            return
+
         dir_x_norm = dataset.meta["dir_x_norm"]
         dir_y_norm = dataset.meta["dir_y_norm"]
         dir_z_norm = dataset.meta["dir_z_norm"]
         dataset.meta["theta"] = np.arccos(dir_z_norm)
         dataset.meta["phi"] = np.arctan2(dir_y_norm, dir_x_norm)
 
+def normalize_meta(dataset, inverse):
 
-def normalize_data(dataset, config, inverse=False):
+    normalize_e_inc(dataset, inverse)
+    normalize_direction(dataset, inverse)
 
-    print("Normalizing data")
+def normalize_pos(dataset, config, inverse):
 
-    normalize_meta(dataset, inverse)
-    _, counts = np.unique(dataset.data["eid"], return_counts=True)
-    scale_xy = config.retention.box_size / 2
-    scale_e = config.energy.threshold
+    try:
+        scale_xy = config.filter_params.retention.box_size / 2
+    except AttributeError:
+        return
+
+    _, counts = np.unique(dataset.data["idx"], return_counts=True)
     r_max = np.sqrt(2 * scale_xy**2)
 
+
     if not inverse:
+
+        required = {"x_hat", "y_hat", "z_hat", "r_hat"}
+        if not required <= dataset.data.keys():
+            return
 
         # normalize x/y position to [-1, 1]
         dataset.data["x_hat_norm"] = dataset.data["x_hat"] / scale_xy
@@ -63,13 +96,9 @@ def normalize_data(dataset, config, inverse=False):
         dataset.data["z_hat_log_norm"] = np.log((dataset.data["z_hat_norm"]) + 1e-6)
         dataset.data["z_hat_sqrt_norm"] = np.sqrt(dataset.data["z_hat_norm"])
 
-        # log/sqrt transform of scaled energy
-        e_scaled = dataset.data["e"] / scale_e
-        dataset.data["e_log_norm"] = np.log(e_scaled)
-        dataset.data["e_sqrt_norm"] = np.sqrt(e_scaled)
-
     else:
-        compute_detector_distances(dataset.meta)
+
+        compute_detector_distances(dataset) # should not be working !!
 
         # denormalize x/y position to [-scale, scale]
         if "x_hat_norm" in dataset.data:
@@ -93,9 +122,39 @@ def normalize_data(dataset, config, inverse=False):
             z_hat_sqrt_norm = np.clip(dataset.data["z_hat_sqrt_norm"], -0.05, None)
             dataset.data["z_hat"] = (z_hat_sqrt_norm**2) * max_dist
 
-        # inverse transform energy
+
+
+def normalize_e_deposit(dataset, config, inverse):
+
+    try:
+        scale_e = config.filter_params.energy.threshold
+    except AttributeError:
+        scale_e = 1
+
+    if not inverse:
+
+        required = {"e"}
+        if not required <= dataset.data.keys():
+            return
+        # log/sqrt transform of scaled energy
+        e_scaled = dataset.data["e"] / scale_e
+        dataset.data["e_log_norm"] = np.log(e_scaled)
+        dataset.data["e_sqrt_norm"] = np.sqrt(e_scaled)
+    else:
+
         if "e_log_norm" in dataset.data:
             e_scaled = np.exp(dataset.data["e_log_norm"])
         elif "e_sqrt_norm" in dataset.data:
             e_scaled = dataset.data["e_sqrt_norm"] ** 2
+        else:
+            return
         dataset.data["e"] = e_scaled * scale_e
+
+
+def normalize_data(dataset, config, inverse=False):
+
+    print("Normalizing data")
+
+    normalize_meta(dataset, inverse)
+    normalize_pos(dataset, config, inverse)
+    normalize_e_deposit(dataset, config, inverse)

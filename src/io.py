@@ -1,12 +1,18 @@
 import os
-import h5py
-import numpy as np 
 import json 
 
 from src.calosim import CaloSimDataset
+from src.step2point import Step2Point
+from src.calochallenge import CaloChallenge
 
 
-def get_file_names(root_dir: str, stage: str) -> list:
+def get_file_name(file_path):
+
+    file_name = os.path.basename(file_path)
+    return os.path.splitext(file_name)[0]
+
+
+def get_file_paths(root_dir: str, stage: str) -> list:
     """
     Return dataset files for a given processing stage.
 
@@ -22,30 +28,25 @@ def get_file_names(root_dir: str, stage: str) -> list:
     Returns
     -------
     list[str]
-        Sorted file names.
+        File names.
     """
 
     if stage == "raw":
-        suffix = ".h5"
+        valid_suffixes = (".h5", ".hdf5")
         search_dir = root_dir
 
     else:
-        suffix = "data.npz"
+        valid_suffixes = ("data.npz",)
         search_dir = os.path.join(root_dir, stage)
 
-    return sorted(
-        (f for f in os.listdir(search_dir) if f.endswith(suffix)),
-        key=lambda f: int("".join(filter(str.isdigit, f)))
-    )
 
+    paths = [
+        os.path.join(search_dir, f)
+        for f in os.listdir(search_dir)
+        if f.endswith(valid_suffixes)
+    ]
+    return [x.removesuffix("_data.npz") for x in paths]
 
-
-
-
-
-
-
-#!!!!!!!!!!
 
 def load_split(split: str, load_dir: str, num_files: int) -> CaloSimDataset:
 
@@ -71,13 +72,11 @@ def load_split(split: str, load_dir: str, num_files: int) -> CaloSimDataset:
     """
 
     dataset = CaloSimDataset()
-    files = get_file_names(root_dir=load_dir, stage=split)
-
-    for f in files[:num_files]:
-
-        file_name = f.rsplit("_", 1)[0]
-        file_path = os.path.join(load_dir, split, file_name)
-        other = CaloSimDataset.from_npz(file_path)
+    files = get_file_paths(root_dir=load_dir, stage=split)
+    
+    for path in files[:num_files]:
+        
+        other = CaloSimDataset.from_npz(path)
         dataset.append(other)
 
     stats = load_stats(load_dir)
@@ -85,7 +84,7 @@ def load_split(split: str, load_dir: str, num_files: int) -> CaloSimDataset:
     return dataset, stats
 
 
-def save_data(dataset: CaloSimDataset, save_dir: str, stage: str, file_idx: int) -> None:
+def save_data(dataset: CaloSimDataset, save_dir: str, stage: str, file_name: str) -> None:
 
     """
     Save a CaloSimDataset split to disk as separate NPZ files for data and meta.
@@ -100,9 +99,11 @@ def save_data(dataset: CaloSimDataset, save_dir: str, stage: str, file_idx: int)
         File index used for naming saved files (e.g. file{file_idx}_data.npz).
     """
 
+    print("Saving data")
+
     save_dir = os.path.join(save_dir, stage)
     os.makedirs(save_dir, exist_ok=True)    
-    file_path = os.path.join(save_dir, f"file{file_idx}")
+    file_path = os.path.join(save_dir, file_name)
     dataset.to_npz(file_path)
 
 
@@ -130,20 +131,12 @@ def load_stats(load_dir):
     return stats
 
 
-def load_data(file_dir: str, file_name: str, file_type: str) -> CaloSimDataset:
+def load_raw(file_path: str, dataset_name: str) -> CaloSimDataset:
 
     """
     Load a raw HDF5 calorimeter simulation file and convert it
     into a structured CaloSimDataset.
-
-    Parameters
-    ----------
-    file_dir : str
-        Directory containing the HDF5 file.
-    file_name : str
-        Name of the file to load.
-    file_type : str
-    
+ 
     Returns
     -------
     CaloSimDataset
@@ -152,12 +145,16 @@ def load_data(file_dir: str, file_name: str, file_type: str) -> CaloSimDataset:
         - meta: event-level features
     """
 
-    file_path = os.path.join(file_dir, file_name)
-    
-    if file_type == "h5":
-        dataset = CaloSimDataset.from_h5(file_path)
+    print("Loading raw data")
 
-    elif file_type == "npz":
-        dataset = CaloSimDataset.from_npz(file_path)
+    dataset_classes = {
+        "calochallenge": CaloChallenge,
+        "step2point": Step2Point,
+    }
 
-    return dataset
+    try:
+        dataset_cls = dataset_classes[dataset_name]
+    except KeyError:
+        raise ValueError(f"Unknown dataset_name '{dataset_name}'.")
+
+    return dataset_cls.from_h5(file_path)

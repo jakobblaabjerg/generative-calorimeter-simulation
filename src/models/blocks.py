@@ -2,6 +2,7 @@ import torch.nn as nn
 from .activations import ACTIVATIONS
 
 class MLP(nn.Module):
+    
     def __init__(
             self,
             hidden_layers,

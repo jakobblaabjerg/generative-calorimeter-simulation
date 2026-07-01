@@ -38,7 +38,7 @@ class ConditionalFlowMatching(BaseModel):
         self.cfg_encoder = cfg.encoder
         self.encoder = self.create_encoder(self.cfg_encoder) if self.cfg_encoder is not None else None
   
-        self.track_velocity = cfg.track_velocity
+        self.track_history = cfg.track_history
 
         self.mlp = MLP(
             hidden_layers=cfg.mlp.hidden_layers, 
@@ -139,8 +139,8 @@ class ConditionalFlowMatching(BaseModel):
 
         # load auxillary model
         self.aux_model = MODEL_REGISTRY[self.aux_model_name](cfg_aux_model.model) # use factory instead
-        self.aux.model.load_checkpoint(self.aux_model_dir)
-        self.aux.model.to(device)
+        self.aux_model.load_checkpoint(self.aux_model_dir)
+        self.aux_model.to(device)
 
     def sample_num_points(self, c):
 
@@ -170,7 +170,7 @@ class ConditionalFlowMatching(BaseModel):
 
         snapshot_times = [0.0, 0.5, 1.0]
         steps = {round(t * (self.num_steps - 1)) for t in snapshot_times}
-        velocities = []
+        states = []
 
         device = num_points.device
         total_points = num_points.sum().item()
@@ -185,28 +185,29 @@ class ConditionalFlowMatching(BaseModel):
             t = (i+1)*delta_t
             v_theta, _ = self.v_theta(z_t, t, c_repeated, num_points)
 
-            if self.track_velocity and i in steps:
-                  velocities.append(v_theta.detach())
+            if self.track_history and i in steps:
+                  states.append((z_t.detach().clone(), v_theta.detach()))
                               
             z_t += v_theta * delta_t
 
-        return z_t, velocities
+        return z_t, states
 
 
-    def to_dataset(self, z, c, num_points, velocities):
+    def to_dataset(self, z, c, num_points, states):
         
         data, meta = {}, {}
 
         z = z.cpu().numpy()      
         c = c.cpu().numpy()
-        velocities = [v.cpu().numpy() for v in velocities]
+        states = [(z.cpu().numpy(), v.cpu().numpy()) for z, v in states]
         num_points = num_points.cpu().numpy().astype(int)  
 
         for j, var in enumerate(self.z_vars):
             data[var] = z[:, j]
 
-            for i in range(len(velocities)):
-                data[f"v_{var}_{i}"] = velocities[i][:, j]
+            if self.track_history:
+                data[f"{var}_hist"] = np.stack([s[0][:, j] for s in states], axis=1)
+                data[f"v_{var}_hist"] = np.stack([s[1][:, j] for s in states], axis=1)
 
         for j, var in enumerate(self.c_vars):
             meta[var] = c[:, j]    
