@@ -35,7 +35,7 @@ def main():
 
     # optional encoder
     if args.encoder and args.model == "cfm":
-        cfg_encoder = load_config(f"configs/{args.encoder}_encoder.yaml")
+        cfg_encoder = load_config(f"configs/{args.dataset}/models/{args.model}/{args.encoder}_encoder.yaml")
         cfg_base.model.encoder = cfg_encoder
 
     search_space = get_search_space(
