@@ -41,6 +41,7 @@ data_loader:
   transforms: *TRANSFORMS
   input_vars: *INPUT_VARS
   data_view: "event"
+  is_ragged: True
   batch_mode: 
     name: "sparse"
 

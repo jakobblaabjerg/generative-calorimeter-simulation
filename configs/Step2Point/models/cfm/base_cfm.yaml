@@ -37,6 +37,7 @@ data_loader:
   input_vars: *INPUT_VARS
   sort_by_time: True
   batch_size: 128
+  is_ragged: True
   data_view: "event"
   batch_mode: 
     name: "sparse"

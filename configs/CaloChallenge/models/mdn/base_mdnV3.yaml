@@ -1,20 +1,23 @@
-name: "mdnV1"
+name: "mdnV3"
 
-model:  
+model:
+  feature_dim: 6480
   add_jacobian: True
   k: 6
-  alpha: 10000
   transforms: &TRANSFORMS 
-    e: "log"
-    z_hat: "sqrt"
+    e: "sqrt"
   input_vars: &INPUT_VARS
-    x_vars: ["x_hat", "y_hat", "z_hat", "e"]
-    c_vars: ["dir_x_norm", "dir_y_norm", "dir_z_norm", "e_inc_norm"]
+    x_vars: ["e"]
+    c_vars: ["e_inc_norm"]
   mlp:
     hidden_layers: [128, 128, 128]
     layer_norm: True
     activation: sigmoid
-
+    output_size: 128
+  mdn_head: 
+    hidden_layers: [64, 64]
+    layer_norm: True
+  
 trainer:
   epochs: 50
   patience: 5
@@ -33,7 +36,9 @@ data_loader:
   standardize_vars: ["e_log_norm", "e_sqrt_norm", "e_inc_norm"]
   transforms: *TRANSFORMS
   input_vars: *INPUT_VARS
-  data_view: "point"
+  data_view: "event"
+  is_ragged: False
   batch_mode: 
-    name: "index"
+    name: "sparse"
+
 

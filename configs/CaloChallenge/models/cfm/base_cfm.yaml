@@ -36,5 +36,6 @@ data_loader:
   input_vars: *INPUT_VARS
   batch_size: 128
   data_view: "event"
+  is_ragged: True
   batch_mode: 
     name: "sparse"
