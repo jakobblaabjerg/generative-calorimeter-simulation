@@ -295,7 +295,8 @@ def get_search_space(
         defaults = {
             "cfm": ["optim", "data_loader", "mlp"],
             "mdnV1": ["optim", "data_loader", "mlp", "mixture"],
-            "mdnV2": ["optim", "data_loader", "mlp", "mixture", "mdn_head", "poisson_head"]
+            "mdnV2": ["optim", "data_loader", "mlp", "mixture", "mdn_head", "poisson_head"],
+            "mdnV3": ["optim", "data_loader", "mlp", "mixture", "mdn_head"]
         }
 
         selected_space = defaults.get(model, []).copy()
