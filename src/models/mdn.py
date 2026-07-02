@@ -394,12 +394,12 @@ class MixtureDensityNetworkV3(BaseModel):
         pi = out[:, idx:idx+self.k]
         idx += self.k
 
-        means = out[:, idx:idx+self.k*self.point_dim]
-        means = means.view(batch_size, self.k, self.point_dim)
-        idx += self.k*self.point_dim
+        means = out[:, idx:idx+self.k*self.feature_dim]
+        means = means.view(batch_size, self.k, self.feature_dim)
+        idx += self.k*self.feature_dim
 
-        log_vars = out[:, idx:idx+self.k*self.point_dim]
-        log_vars = log_vars.view(batch_size, self.k, self.point_dim)
+        log_vars = out[:, idx:idx+self.k*self.feature_dim]
+        log_vars = log_vars.view(batch_size, self.k, self.feature_dim)
 
         return pi, means, log_vars
   
