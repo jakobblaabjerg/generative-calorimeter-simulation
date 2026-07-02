@@ -101,16 +101,30 @@ class EventTorchDataset(BaseTorchDataset):
             transforms, 
             input_vars, 
             standardize_vars,
+            is_ragged=True,
             sort_by_time=False,
             ):
         
         super().__init__(split, load_dir, num_files, transforms, input_vars, standardize_vars)
+        self.is_ragged = is_ragged
 
         if sort_by_time:
             self.sort_by_time()
-        
-        self.create_index_map()
 
+        if self.is_ragged:    
+            self.create_index_map()
+
+        else:
+            self.create_fixed_index()
+
+
+    def create_fixed_index(self):
+
+        _, counts = np.unique(self.dataset.data["idx"], return_counts=True)
+        size = counts[0]
+
+        for k in self.x_vars + self.z_vars:
+            self.dataset.data[k] = self.dataset.data[k].reshape(-1, size)
 
     def sort_by_time(self):
 
@@ -136,18 +150,38 @@ class EventTorchDataset(BaseTorchDataset):
 
     def __getitem__(self, idx):
 
-        mask = self.indices[idx]
 
-        x = np.column_stack([self.dataset.data[k][mask] for k in self.x_vars])
-        z = np.column_stack([self.dataset.data[k][mask] for k in self.z_vars])
+        if self.is_ragged:
+
+            mask = self.indices[idx]
+
+            x = np.column_stack([self.dataset.data[k][mask] for k in self.x_vars])
+            z = np.column_stack([self.dataset.data[k][mask] for k in self.z_vars])
+            
+        
+        else:
+
+            if len(self.x_vars) == 1:
+                x = self.dataset.data[self.x_vars[0]][idx]
+            else:
+                x = np.stack([self.dataset.data[k][idx] for k in self.x_vars], axis=1)
+
+            if len(self.z_vars) == 1:
+                z = self.dataset.data[self.z_vars[0]][idx]
+            else:
+                z = np.stack([self.dataset.data[k][idx] for k in self.z_vars], axis=1)
+
+
         c = np.array([self.dataset.meta[k][idx] for k in self.c_vars])
-    
+
         z = torch.from_numpy(z.astype(np.float32))
         x = torch.from_numpy(x.astype(np.float32))
         c = torch.from_numpy(c.astype(np.float32)) 
 
         return x, z, c
     
+
+
     def create_collate_fn(self, name, **kwargs):
         return COLLATE_REGISTRY[name](**kwargs)     
     
@@ -269,10 +303,6 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
 
         return c
 
-    def create_collate_fn(self, name):
-        return None
-
-
     
 def create_meta(num_samples: int, phi: float, theta: float, e_inc: float, seed=None):
 
@@ -322,8 +352,9 @@ def create_loader(batch_size: int, data_view: str, batch_mode: dict | None = Non
     dataset_cls = DATASET_REGISTRY[data_view]
     dataset = dataset_cls(split=split, **kwargs)
 
-    batch_mode = batch_mode or {}
-    collate_fn = dataset.create_collate_fn(**vars(batch_mode))
+    collate_fn = None
+    if batch_mode is not None:
+        collate_fn = dataset.create_collate_fn(**vars(batch_mode))
 
     return torch.utils.data.DataLoader(
         dataset,

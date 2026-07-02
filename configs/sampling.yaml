@@ -9,5 +9,3 @@ data_loader:
   batch_size: 32
   seed: 123
   data_view: conditional
-  batch_mode:
-    name: sparse
