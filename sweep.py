@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
 
     model_dir = (
-        f"{args.model[:3]}/{args.model}"
+        f"{args.model[:3]}"
         if args.model.startswith("mdn")
         else args.model
     )
