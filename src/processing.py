@@ -1,79 +1,14 @@
 from src.utils import filter_dict
 from src.io import load_raw, get_file_paths, save_data, get_file_name
 from src.geometry import compute_geometric_features
-from src.filters import apply_filter, FILTER_REGISTRY
-from src.data.transforms import normalize_data, standardize_data
+
+from src.data.transforms import normalize_data, standardize_data, voxel_to_point
 from src.calosim import CaloSimDataset
 from src.statistics import DatasetStats
-from src.reporting import FilterReport, DatasetReport
+from src.reporting import DatasetReport
+from src.operations import aggregate_data, filter_data, remove_unused_data
 
 import numpy as np 
-
-
-def filter_data(dataset, filter_name, params):
-
-    print(f"Filtering by {filter_name}")
-    mask_fn = FILTER_REGISTRY[filter_name]
-    report = apply_filter(dataset, mask_fn, **vars(params))
-
-    return report
-
-def aggregate_data(dataset):
-
-    print("Aggregating data")
-
-    before = dataset.state()
-
-    keys = [dataset.data["idx"], dataset.data["pid"], dataset.data["cid"]]
-    keys = np.rec.fromarrays(keys, names="idx, pid, cid")
-
-    unique, first, inverse, counts = np.unique(keys, return_index=True, return_inverse=True, return_counts=True)
-
-    operations = {
-        "idx": "group",
-        "pid": "group",
-        "cid": "group",
-        "eid": "first",
-        "subdet": "first",
-        "e": "sum",
-    }
-
-    for key in dataset.data.keys():
-
-        agg_op = operations.get(key, "mean")
-        values = dataset.data[key]
-
-        if agg_op == "group":
-            dataset.data[key] = unique[key]
-
-        elif agg_op == "first":
-            dataset.data[key] = values[first]
-
-        elif agg_op == "sum":
-            dataset.data[key] = np.bincount(inverse, weights=values)
-
-        elif agg_op == "mean":
-            dataset.data[key] = np.bincount(inverse, weights=values)/counts 
-
-    return FilterReport(
-        name="aggregation",
-        before=before,
-        after=dataset.state(),
-    )
-
-def remove_unused_data(dataset, keepvars):
-
-    print("Removing unsused data")
-    
-    dataset.data = {
-        key: value for key, value in dataset.data.items()
-        if key in keepvars or key.endswith("norm")
-    }
-    
-    dataset.meta = {
-        key: value for key, value in dataset.meta.items()
-        if key in keepvars or key.endswith("norm")
-    }
 
 def preprocess_data(dataset, config, save_dir, file_name, debug):
 
@@ -83,11 +18,12 @@ def preprocess_data(dataset, config, save_dir, file_name, debug):
 
         for filter_name in config.filters:
 
+            params = getattr(config.filter_params, filter_name)
+
             if filter_name == "aggregate":
-                report = aggregate_data(dataset)
+                report = aggregate_data(dataset, **vars(params))
 
             else:
-                params = getattr(config.filter_params, filter_name)
                 report = filter_data(dataset, filter_name, params)
             
             dataset_report.add(report)
@@ -98,7 +34,7 @@ def preprocess_data(dataset, config, save_dir, file_name, debug):
     if config.normalize:
         normalize_data(dataset, config)
 
-    remove_unused_data(dataset, config.keepvars)
+    remove_unused_data(dataset, config.keepvars, "norm")
 
 def postprocess_data(dataset, stats, config, standardize_vars):
         standardize_data(dataset, stats, standardize_vars, inverse=True)
@@ -179,6 +115,9 @@ def build_dataset(load_dir, save_dir, config, debug=False):
         else:
             dataset = CaloSimDataset.from_npz(path)
    
+        if config.view == "point" and dataset.view == "voxel":
+            voxel_to_point(dataset, config.binning)
+
         preprocess_data(dataset, config, save_dir, f_name, debug)
         stats = split_data(dataset, config, stats, save_dir, f_name)
 
