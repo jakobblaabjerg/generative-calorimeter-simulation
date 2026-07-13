@@ -1,0 +1,7 @@
+name: deepsets
+use_cond: False
+hidden_layers: [128, 128]
+layer_norm: False
+output_size: 128
+activation: relu
+pooling: mean 
