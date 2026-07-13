@@ -1,6 +1,6 @@
 from src.logger import setup_logger
 from src.config import sample_config
-from src.models.factory import create_model
+from src.models.registry import MODEL_REGISTRY 
 
 from .evaluation import evaluate_quality, evaluate_complexity
 from .trainer import run_train
@@ -33,7 +33,7 @@ def run_sweep(cfg, search_space, num_trials, num_mc_samples):
             continue
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = create_model(cfg_version)
+        model = MODEL_REGISTRY[cfg_version.name](cfg_version.model)
         model.to(device)
         model.load_checkpoint(cfg_version.run_dir)
         

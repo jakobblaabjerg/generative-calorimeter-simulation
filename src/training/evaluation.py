@@ -1,6 +1,6 @@
 from src.config import load_config
 
-from src.models.factory import create_model
+from src.models.registry import MODEL_REGISTRY 
 from src.io import load_stats
 from src.data.datasets import create_loader
 from src.utils import set_seed, synchronize_cuda
@@ -21,7 +21,7 @@ def run_eval(model_dir, data_dir, num_mc_samples, cfg_sampling, seed=None):
     cfg = load_config(f"{model_dir}/config.yaml")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = create_model(cfg)
+    model = MODEL_REGISTRY[cfg.name](cfg.model)
     model.to(device)
     model.load_checkpoint(cfg.run_dir)
 
