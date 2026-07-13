@@ -1,12 +1,15 @@
 import numpy as np
 from dataclasses import dataclass, field
 from src.utils import filter_dict
+from typing import Optional
+
 
 @dataclass 
 class CaloSimDataset: 
 
     data: dict = field(default_factory=dict)           
     meta: dict = field(default_factory=dict)
+    view: Optional[str] = None
 
     @property 
     def num_events(self):
@@ -97,12 +100,13 @@ class CaloSimDataset:
         """
 
         # assert they have same unique idxs
+        dtype = self.meta["idx"].dtype
 
         idx_old = np.unique(self.meta["idx"])
         idx_new = {old: new for new, old in enumerate(idx_old)}
     
-        self.meta["idx"] = np.array([idx_new[eid] for eid in self.meta["idx"]])
-        self.data["idx"] = np.array([idx_new[eid] for eid in self.data["idx"]])
+        self.meta["idx"] = np.array([idx_new[eid] for eid in self.meta["idx"]], dtype=dtype)
+        self.data["idx"] = np.array([idx_new[eid] for eid in self.data["idx"]], dtype=dtype)
 
 
     def sync(self) -> None:
@@ -156,4 +160,3 @@ class CaloSimDataset:
             data={key: value.copy() for key, value in self.data.items()},
             meta={key: value.copy() for key, value in self.meta.items()},
         )
-    
