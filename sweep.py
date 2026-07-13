@@ -20,7 +20,15 @@ def main():
 
     args = parser.parse_args()
 
-    cfg_base = load_config(f"configs/{args.dataset}/models/{args.model}/base_{args.model}.yaml")
+    model_dir = (
+        f"{args.model[:3]}/{args.model}"
+        if args.model.startswith("mdn")
+        else args.model
+    )
+
+    cfg_base = load_config(
+        f"configs/{args.dataset}/models/{model_dir}/base_{args.model}.yaml"
+    )
 
     overrides = {
         "trainer.patience": args.patience,
