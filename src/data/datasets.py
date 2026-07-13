@@ -56,7 +56,6 @@ def get_feature_names(input_vars, transforms):
     z_vars = [feature_name(var, getattr(transforms, var, None)) for var in input_vars.z_vars]
     c_vars = [feature_name(var, getattr(transforms, var, None)) for var in input_vars.c_vars]
     
-    print(x_vars, z_vars, c_vars)
     return x_vars, z_vars, c_vars
 
 def feature_name(name, transform=None):
