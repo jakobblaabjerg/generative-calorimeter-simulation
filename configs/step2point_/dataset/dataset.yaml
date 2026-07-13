@@ -2,8 +2,11 @@ name: step2point
 normalize: True
 keepvars: ["x_hat", "y_hat", "z_hat", "r_hat", "theta", "phi", "e", "e_inc", "eid", "idx", "t"]  
 split_ratios: [0.8, 0.1, 0.1]
+view: point
+transforms:
+  meta: ["e_inc", "direction"]
+  data: ["e_deposit", "xy_position", "z_position", "r_position"]            
 filters: ["time", "energy", "subdet", "z_hat", "misalignment", "retention", "xy_box", "aggregate"]   
-
 filter_params:
   time:
     threshold: 200
@@ -20,19 +23,11 @@ filter_params:
   energy:
     threshold: 0.00001
   subdet:
-    subdets: ["ECalBarrelCollection", "ECalEndcapCollection"]
-
-
-
-
-
-  
-  
-  
-
-
-
-
-
-
-
+    subdets: [0, 1]
+  aggregate:
+    operations:
+      eid: first
+      subdet: first
+      e: sum 
+    default: mean
+    keys: ["idx", "pid", "cid"]
