@@ -22,9 +22,9 @@ class Step2Point:
         """
         with h5py.File(file_path, "r") as f:
             data = cls._extract_steps(f)
-            data = cls._decode_subdetector(f, data)
+            # data = cls._decode_subdetector(f, data)
             meta = cls._extract_primary(f)
-            dataset = CaloSimDataset(data=data, meta=meta)
+            dataset = CaloSimDataset(data=data, meta=meta, view="point")
 
         dataset.sync()
         dataset.reindex()
@@ -68,14 +68,12 @@ class Step2Point:
             - subdet: subdetector index (to be decoded later)
         """
 
-        pos = f["steps"]["position"][:]
-
         return {
             "eid": f["steps"]["event_id"][:],
             "idx": f["steps"]["event_id"][:],
-            "x": pos[:, 0],
-            "y": pos[:, 1],
-            "z": pos[:, 2],
+            "x": f["steps"]["position"][:, 0],
+            "y": f["steps"]["position"][:, 1],
+            "z": f["steps"]["position"][:, 2],
             "e": f["steps"]["energy"][:],
             "t": f["steps"]["time"][:],
             "pid": f["steps"]["mcparticle_id"][:],
@@ -103,14 +101,12 @@ class Step2Point:
             - pdg: PDG particle ID
         """
 
-        momentum = f["primary"]["momentum"][:]
-
         return {
             "eid": f["primary"]["event_id"][:],
             "idx": f["primary"]["event_id"][:],
-            "p_x": momentum[:,0],
-            "p_y": momentum[:,1],
-            "p_z": momentum[:,2],
+            "p_x": f["primary"]["momentum"][:,0],
+            "p_y": f["primary"]["momentum"][:,1],
+            "p_z": f["primary"]["momentum"][:,2],
             "pdg": f["primary"]["pdg"][:],
             }
 
