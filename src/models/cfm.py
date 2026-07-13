@@ -5,7 +5,7 @@ from .mdn import MixtureDensityNetworkV1, MixtureDensityNetworkV2
 from . import encoders
 from .registry import register_model, ENCODER_REGISTRY, MODEL_REGISTRY
 
-from src.data.datasets import create_var_names 
+from src.data.datasets import get_feature_names 
 from src.config import load_config
 from src.calosim import CaloSimDataset
 
@@ -28,7 +28,7 @@ class ConditionalFlowMatching(BaseModel):
         self.num_steps = cfg.num_steps
 
         # variable names for z and c
-        _, self.z_vars, self.c_vars = create_var_names(cfg.input_vars, cfg.transforms)
+        _, self.z_vars, self.c_vars = get_feature_names(cfg.input_vars, cfg.transforms)
 
         # input dimensions 
         self.point_dim = len(self.z_vars)
