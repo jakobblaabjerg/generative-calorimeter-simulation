@@ -52,6 +52,8 @@ def get_feature_names(input_vars, transforms):
         Input variables (x_vars), transformed target variables (z_vars),
         and conditioning variables (c_vars).
     """
+    print("hej")
+
     x_vars = [var for var in input.z_vars if hasattr(transforms, var)]
     z_vars = [feature_name(var, getattr(transforms, var, None)) for var in input_vars.z_vars]
     c_vars = [feature_name(var, getattr(transforms, var, None)) for var in input_vars.c_vars]
