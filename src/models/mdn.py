@@ -8,7 +8,7 @@ from .base import BaseModel
 from .registry import register_model
 
 
-from src.data.datasets import create_var_names 
+from src.data.datasets import get_feature_names 
 from src.calosim import CaloSimDataset
 
 LOG_2PI = math.log(2 * math.pi)
@@ -37,19 +37,19 @@ class BaseMDN(BaseModel):
 
         self.k = cfg.k
         self.alpha = cfg.alpha
-
         self.add_jacobian = cfg.add_jacobian
-       
-        if self.add_jacobian:
-            self.z_hat_jacobian = create_jacobian(cfg.transforms.z_hat)
-            self.e_jacobian = create_jacobian(cfg.transforms.e)
 
-        self.x_vars, self.z_vars, self.c_vars = create_var_names(cfg.input_vars, cfg.transforms)
+        self.x_vars, self.z_vars, self.c_vars = get_feature_names(cfg.input_vars, cfg.transforms)
         self.point_dim = len(self.z_vars)
         self.cond_dim = len(self.c_vars)
 
-        self.idx_e = self.x_vars.index("e")
-        self.idx_z_hat = self.x_vars.index("z_hat")
+        if self.add_jacobian:
+
+            self.jacobians = {
+                var: create_jacobian(getattr(cfg.transforms, var))
+                for var in self.x_vars
+                if hasattr(cfg.transforms, var)
+            }
 
 
     def to_dataset(self, z, c, num_points):
@@ -128,12 +128,11 @@ class MixtureDensityNetworkV1(BaseMDN):
 
     def loss_point(self, pi, means, log_vars, z, x):
 
-        log_jacobian = torch.zeros(x.size(0), device=x.device)        
+        log_jacobian = torch.zeros(x.size(0), device=x.device)
 
-        if self.add_jacobian and self.e_jacobian is not None:
-            log_jacobian += self.e_jacobian(x[:, self.idx_e])
-        if self.add_jacobian and self.z_hat_jacobian is not None:
-            log_jacobian += self.z_hat_jacobian(x[:, self.idx_z_hat])
+        if self.add_jacobian:
+            for var, jacobian in self.jacobians.items():
+                log_jacobian += jacobian(x[:, self.x_vars.index(var)])
 
         z = z.unsqueeze(1).expand(-1, self.k, -1)  # (batch, k, point_dim)
         
@@ -298,11 +297,9 @@ class MixtureDensityNetworkV2(BaseMDN):
         log_prob_sum = torch.logsumexp(weighted_log_prob, dim=1) # (sum(num_points),)
         log_jacobian = torch.zeros_like(log_prob_sum) # (sum(num_points),)
 
-        if self.add_jacobian and self.e_jacobian is not None:
-            log_jacobian += self.e_jacobian(x[:, self.idx_e])
-        
-        if self.add_jacobian and self.z_hat_jacobian is not None:
-            log_jacobian += self.z_hat_jacobian(x[:, self.idx_z_hat])
+        if self.add_jacobian:
+            for var, jacobian in self.jacobians.items():
+                log_jacobian += jacobian(x[:, self.x_vars.index(var)])
 
         # normalize loss event-level
         loss_point = torch.segment_reduce(log_prob_sum+log_jacobian, reduce="mean", lengths=num_points, axis=0)        
@@ -351,12 +348,17 @@ class MixtureDensityNetworkV3(BaseModel):
         self.feature_dim = cfg.feature_dim
         self.k = cfg.k
         self.add_jacobian = cfg.add_jacobian
-       
-        if self.add_jacobian:
-            self.e_jacobian = create_jacobian(cfg.transforms.e)
 
-        self.x_vars, self.z_vars, self.c_vars = create_var_names(cfg.input_vars, cfg.transforms) 
+        self.x_vars, self.z_vars, self.c_vars = get_feature_names(cfg.input_vars, cfg.transforms) 
         self.cond_dim = len(self.c_vars)
+
+        if self.add_jacobian:
+
+            self.jacobians = {
+                var: create_jacobian(getattr(cfg.transforms, var))
+                for var in self.x_vars
+                if hasattr(cfg.transforms, var)
+            }
 
         self.mlp = MLP(
             hidden_layers=cfg.mlp.hidden_layers, 
@@ -420,10 +422,14 @@ class MixtureDensityNetworkV3(BaseModel):
         log_prob_sum = torch.logsumexp(weighted_log_prob, dim=1) # (b,)
         log_jacobian = torch.zeros_like(log_prob_sum) # (b,)
 
-        if self.add_jacobian and self.e_jacobian is not None:
-            log_jacobian += self.e_jacobian(x).sum(dim=1)
-        
+        # only works for energy as feature dim only
+        if self.add_jacobian:
+            for var, jacobian in self.jacobians.items():
+                log_jacobian += jacobian(x).sum(dim=1)
+
+
         return -log_prob_sum, -log_jacobian
+
 
     @torch.no_grad()
     def sample(self, c):

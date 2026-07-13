@@ -26,14 +26,14 @@ class BaseTorchDataset(torch.utils.data.Dataset):
 
         self.dataset, self.stats = load_split(split, load_dir, num_files)
         standardize_data(self.dataset, self.stats, standardize_vars) 
-        self.x_vars, self.z_vars, self.c_vars = create_var_names(input_vars, transforms)
+        self.x_vars, self.z_vars, self.c_vars = get_feature_names(input_vars, transforms)
 
 
     def create_collate_fn(self, name):
         return None
 
 
-def create_var_names(input_vars, transforms):
+def get_feature_names(input_vars, transforms):
 
     """
     Create feature variable names used as model inputs and targets.
@@ -52,13 +52,14 @@ def create_var_names(input_vars, transforms):
         Input variables (x_vars), transformed target variables (z_vars),
         and conditioning variables (c_vars).
     """
-    x_vars = input_vars.x_vars
-    c_vars = input_vars.c_vars
-    z_vars = [to_z_name(var, getattr(transforms, var, None)) for var in x_vars]
+    x_vars = [var for var in input.z_vars if hasattr(transforms, var)]
+    z_vars = [feature_name(var, getattr(transforms, var, None)) for var in input_vars.z_vars]
+    c_vars = [feature_name(var, getattr(transforms, var, None)) for var in input_vars.c_vars]
     
+    print(x_vars, z_vars, c_vars)
     return x_vars, z_vars, c_vars
 
-def to_z_name(name, transform=None):
+def feature_name(name, transform=None):
 
     """
     Construct the standardized target variable name.
@@ -160,16 +161,9 @@ class EventTorchDataset(BaseTorchDataset):
             
         
         else:
-
-            if len(self.x_vars) == 1:
-                x = self.dataset.data[self.x_vars[0]][idx]
-            else:
-                x = np.stack([self.dataset.data[k][idx] for k in self.x_vars], axis=1)
-
-            if len(self.z_vars) == 1:
-                z = self.dataset.data[self.z_vars[0]][idx]
-            else:
-                z = np.stack([self.dataset.data[k][idx] for k in self.z_vars], axis=1)
+            # only works for energy as the only variable!
+            x = self.dataset.data[self.x_vars[0]][idx]
+            z = self.dataset.data[self.z_vars[0]][idx]
 
 
         c = np.array([self.dataset.meta[k][idx] for k in self.c_vars])
@@ -353,6 +347,7 @@ def create_loader(batch_size: int, data_view: str, batch_mode: dict | None = Non
     dataset = dataset_cls(split=split, **kwargs)
 
     collate_fn = None
+    
     if batch_mode is not None:
         collate_fn = dataset.create_collate_fn(**vars(batch_mode))
 
