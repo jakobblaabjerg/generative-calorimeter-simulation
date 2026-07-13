@@ -1,8 +1,12 @@
+from __future__ import annotations
 import numpy as np 
-from src.calosim import CaloSimDataset
 from dataclasses import dataclass
 from src.utils import filter_dict
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.calosim import CaloSimDataset
 
 # remove this
 def filter_by_xy_box(data, box_size):
@@ -667,7 +671,6 @@ def compute_energy_sum(dataset: CaloSimDataset) -> None:
     dataset.meta["e_sum"] = np.bincount(idxs, weights=e)
 
 
-
 def compute_geometric_features(dataset: CaloSimDataset, inverse: bool = False) -> None:
 
     """
@@ -730,7 +733,7 @@ def compute_geometric_features(dataset: CaloSimDataset, inverse: bool = False) -
         compute_transverse_radius(dataset)
 
     else:
-        dataset.data["subdet"] = np.repeat(str(0), len(dataset.data["idx"]))
+        dataset.data["subdet"] = np.repeat(-1, len(dataset.data["idx"]))
         compute_basis(dataset)
         shift_z_hat(dataset, inverse=True)
         project_coordinates(dataset, inverse=True)
