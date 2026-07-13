@@ -1,0 +1,13 @@
+name: calochallenge
+normalize: True
+keepvars: ["e", "e_inc", "idx"]  
+split_ratios: [0.8, 0.1, 0.1]
+transforms:
+  meta: ["e_inc"]
+  data: ["e_deposit"]
+filters: []   
+view: point
+binning:
+  r: 9
+  a: 16
+  z: 45
