@@ -3,8 +3,9 @@ name: "cfm"
 model:
   track_history: False
   input_vars: &INPUT_VARS
-    x_vars: ["e"]
-    c_vars: ["e_inc_norm"]
+    #z_vars: ["e"]
+    z_vars: ["x_hat", "y_hat", "z_hat", "e"]
+    c_vars: ["e_inc"]
   transforms: &TRANSFORMS 
     e: "sqrt"
   num_steps: 40

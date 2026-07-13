@@ -102,7 +102,7 @@ class EventTorchDataset(BaseTorchDataset):
             transforms, 
             input_vars, 
             standardize_vars,
-            is_ragged=True,
+            is_ragged,
             sort_by_time=False,
             ):
         
@@ -347,7 +347,7 @@ def create_loader(batch_size: int, data_view: str, batch_mode: dict | None = Non
     dataset = dataset_cls(split=split, **kwargs)
 
     collate_fn = None
-    
+
     if batch_mode is not None:
         collate_fn = dataset.create_collate_fn(**vars(batch_mode))
 

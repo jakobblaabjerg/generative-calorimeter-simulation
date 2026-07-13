@@ -3,8 +3,8 @@ name: "cfm"
 model:
   track_history: False
   input_vars: &INPUT_VARS
-    x_vars: ["x_hat", "y_hat", "z_hat", "e"]
-    c_vars: ["dir_x_norm", "dir_y_norm", "dir_z_norm", "e_inc_norm"]
+    z_vars: ["x_hat", "y_hat", "z_hat", "e"]
+    c_vars: ["dir_x", "dir_y", "dir_z", "e_inc"]
   transforms: &TRANSFORMS 
     e: "log"
     z_hat: "sqrt"

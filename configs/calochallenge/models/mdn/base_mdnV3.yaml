@@ -7,8 +7,8 @@ model:
   transforms: &TRANSFORMS 
     e: "sqrt"
   input_vars: &INPUT_VARS
-    x_vars: ["e"]
-    c_vars: ["e_inc_norm"]
+    z_vars: ["e"]
+    c_vars: ["e_inc"]
   mlp:
     hidden_layers: [128, 128, 128]
     layer_norm: True
