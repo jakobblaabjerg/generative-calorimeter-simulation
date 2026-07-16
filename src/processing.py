@@ -2,7 +2,7 @@ from src.utils import filter_dict
 from src.io import load_raw, get_file_paths, save_data, get_file_name
 from src.geometry import compute_geometric_features
 
-from src.data.transforms import normalize_data, standardize_data, voxel_to_point
+from src.data.transforms import normalize_data, standardize_data, voxel_to_point, point_to_voxel
 from src.calosim import CaloSimDataset
 from src.statistics import DatasetStats
 from src.reporting import DatasetReport
@@ -37,9 +37,20 @@ def preprocess_data(dataset, config, save_dir, file_name, debug):
     remove_unused_data(dataset, config.keepvars, "norm")
 
 def postprocess_data(dataset, stats, config, standardize_vars):
-        standardize_data(dataset, stats, standardize_vars, inverse=True)
-        normalize_data(dataset, config, inverse=True)
+    
+    standardize_data(dataset, stats, standardize_vars, inverse=True)
+    normalize_data(dataset, config, inverse=True)
+    
+
+    # fragile!!
+    if "z_hat_norm" in dataset.data and "z_hat" not in dataset.data:       
+        point_to_voxel(dataset, config.binning)
+    elif "z_hat_norm" not in dataset.data:
+        pass
+    else:
         compute_geometric_features(dataset, inverse=True)
+
+
 
 def create_splits(dataset, ratios, seed=42):
 

@@ -1,0 +1,19 @@
+num_files: 1
+device: cuda
+
+data_loader:
+ 
+  conditions: 
+    e_inc: null
+  
+  sampling_specs:
+    e_inc:
+      min: 1000 # mev
+      max: 1000000 # mev
+      distribution: log_uniform
+
+  num_samples: 10000
+  batch_size: 32
+  seed: 123
+  data_view: conditional
+    

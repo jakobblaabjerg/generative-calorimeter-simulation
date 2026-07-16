@@ -6,7 +6,6 @@ from src.calosim import CaloSimDataset
 from src.utils import move_to_device
 from src.processing import postprocess_data
 
-
 from tqdm import tqdm
 import torch
 

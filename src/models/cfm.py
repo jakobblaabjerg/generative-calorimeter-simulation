@@ -19,6 +19,8 @@ class ConditionalFlowMatching(BaseModel):
 
         super().__init__()
 
+        self.num_voxels = getattr(cfg, "num_voxels", None) # only for sampling! 
+
         # auxillary model used for inference     
         self.aux_model = None
         self.aux_model_dir = cfg.aux_model.model_dir
@@ -146,14 +148,21 @@ class ConditionalFlowMatching(BaseModel):
 
         device = c.device
 
+        if self.num_voxels is not None:
+
+            return torch.full(
+                (c.shape[0],),
+                self.num_voxels,
+                dtype=torch.long,
+                device=device,
+            )
+        
         # load aux model if it does not exist
         if self.aux_model is None:
             self._load_model_aux(device)
 
         # sample from auxilary model
-        num_points = self.aux_model.sample_num_points(c)
-
-        return num_points 
+        return self.aux_model.sample_num_points(c)
 
 
     def sample_noise(self, num_points):

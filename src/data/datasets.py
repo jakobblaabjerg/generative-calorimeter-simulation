@@ -268,16 +268,15 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         num_samples,
         standardize_vars,
         stats,
-        phi,
-        theta, 
-        e_inc,
+        conditions,
+        sampling_specs,
         seed,
         split=None
         ):
 
         super().__init__()
 
-        self.dataset = create_meta(num_samples, phi, theta, e_inc, seed)
+        self.dataset = create_meta(num_samples, conditions, sampling_specs, seed)
         normalize_meta(self.dataset, inverse=False)
         standardize_data(self.dataset, stats, standardize_vars)
 
@@ -296,46 +295,49 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
 
         return c
 
-    
-def create_meta(num_samples: int, phi: float, theta: float, e_inc: float, seed=None):
 
-    """
-    Generate conditioning data for sampling.
-
-    Parameters
-    ----------
-    num_samples : int
-        Number of samples to generate.
-    phi : float or None, optional
-        Fixed azimuthal angle. If None, values are sampled uniformly.
-    theta : float or None, optional
-        Fixed polar angle. If None, values are sampled uniformly.
-    e_inc : float or None, optional
-        Fixed incident energy. If None, values are sampled uniformly.
-    seed : int or None, optional
-        Random seed used for sampling.
-
-    Returns
-    -------
-    CaloSimDataset
-    """
+  
+def create_meta(num_samples: int, conditions, sampling_specs, seed=None):
 
     rng = np.random.default_rng(seed)
-    meta = dict()
-    
-    sampling_specs = {
-        "phi": (-np.pi, np.pi, phi),
-        "theta": (6 * np.pi / 180, 174 * np.pi / 180, theta),
-        "e_inc": (0.1, 100, e_inc)
-    }
-    
-    for key, (min_val, max_val, val) in sampling_specs.items():
-        if val is None:
-            u = rng.uniform(size=num_samples).astype(np.float32)
-            meta[key] = u * (max_val - min_val) + min_val
+    meta = {}
+
+    for key, spec in vars(sampling_specs).items():
+
+        value = getattr(conditions, key, None)
+        
+        if value is None:
+            
+            if spec.distribution == "uniform":        
+                samples = rng.uniform(
+                    spec.min,
+                    spec.max,
+                    num_samples,
+                    )
+
+            elif spec.distribution == "log_uniform":
+                samples = np.exp(
+                    rng.uniform(
+                        np.log(spec.min),
+                        np.log(spec.max),
+                        num_samples,
+                    )
+                )
+
+            else:
+                raise ValueError(
+                    f"Unknown distribution '{spec.distribution}' for '{key}'"
+                )
+            
+            meta[key] = samples.astype(np.float32)
+
         else:
-            meta[key] = np.repeat(val, num_samples).astype(np.float32)
-   
+            meta[key] = np.full(
+                num_samples,
+                value,
+                dtype=np.float32,
+            )
+
     return CaloSimDataset(meta=meta)
 
 

@@ -62,18 +62,25 @@ def voxel_to_point(dataset, binning):
 
 
 
-def point_to_voxel(dataset, binning, coord_system):
+def point_to_voxel(dataset, binning):
 
     z = dataset.data["z_hat_norm"]
 
-    if coord_system == "cartesian":
+    if {"x_hat_norm", "y_hat_norm"} <= dataset.data.keys():
         x = dataset.data["x_hat_norm"]
         y = dataset.data["y_hat_norm"]
         a, r = cartesian_to_cylindrical(x, y)
 
-    elif coord_system == "cylindrical":
+    elif {"a_hat_norm", "r_hat_norm"} <= dataset.data.keys():
         a = dataset.data["a_hat_norm"]
         r = dataset.data["r_hat_norm"]
+    
+    else:
+        raise ValueError(
+            "point_to_voxel requires either "
+            "('x_hat_norm', 'y_hat_norm') or "
+            "('a_hat_norm', 'r_hat_norm')."
+        )
 
     voxels_sparse = np.stack([z, a, r], axis=-1)
 

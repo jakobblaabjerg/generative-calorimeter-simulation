@@ -1,0 +1,29 @@
+num_files: 1
+device: cuda
+
+data_loader:
+
+  conditions: 
+    phi: null
+    theta: null
+    e_inc: null
+  
+  sampling_specs:
+    phi:
+      min: -3.14159265
+      max: 3.14159265
+      distribution: uniform
+    theta:
+      min: 0.10471976   
+      max: 3.03687290   
+      distribution: uniform
+    e_inc:
+      min: 0.1 # gev
+      max: 100 # gev
+      distribution: uniform
+      
+  num_samples: 3
+  batch_size: 32
+  seed: 123
+  data_view: conditional
+    
