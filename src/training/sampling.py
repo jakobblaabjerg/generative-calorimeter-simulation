@@ -1,4 +1,5 @@
 from src.models.registry import MODEL_REGISTRY 
+from src.models import cfm, mdn
 from src.config import load_config
 from src.io import load_stats, save_data
 from src.data.datasets import create_loader
@@ -15,7 +16,7 @@ def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
     cfg_version = load_config(f"{model_dir}/config.yaml")
 
     device = torch.device(cfg_sampling.device)
-    model = MODEL_REGISTRY[cfg_version.name](cfg_version.model)
+    model = MODEL_REGISTRY[cfg_version.name](cfg_version.model) 
     model.load_checkpoint(model_dir) # changed from run dir
     model.to(device)
 
