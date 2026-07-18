@@ -34,7 +34,7 @@ def main():
         model_dir=args.model_dir,
         data_dir=args.data_dir,
         save_dir=args.save_dir,
-        cfg_filters=cfg_filters,
+        cfg_dataset=cfg_filters,
         cfg_sampling=cfg_sampling, 
     )
 
