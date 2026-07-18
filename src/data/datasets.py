@@ -280,17 +280,20 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         normalize_meta(self.dataset, inverse=False)
         standardize_data(self.dataset, stats, standardize_vars)
 
+
+        if "theta" in vars(conditions) and "phi" in vars(conditions):
+            c_vars = ["dir_x", "dir_y", "dir_z", "e_inc"] # MUST MATCH MODEL 
+        else:
+            c_vars = ["e_inc"]
+        self.c_vars = [feature_name(var, None) for var in c_vars]
+        
+
     def __len__(self):
-        return len(self.dataset.meta["e_inc"]) # change this to something better
+        return len(self.dataset.meta["e_inc"]) 
 
     def __getitem__(self, idx):
 
-        dir_x = self.dataset.meta["dir_x_norm"][idx]
-        dir_y = self.dataset.meta["dir_y_norm"][idx]
-        dir_z = self.dataset.meta["dir_z_norm"][idx]
-        e_inc = self.dataset.meta["e_inc_norm"][idx] 
-
-        c = np.array([dir_x, dir_y, dir_z, e_inc])
+        c = np.array([self.dataset.meta[k][idx] for k in self.c_vars])
         c = torch.from_numpy(c) # (4,)
 
         return c
