@@ -11,7 +11,7 @@ from tqdm import tqdm
 import torch
 
 
-def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
+def run_generation(model_dir, data_dir, save_dir, cfg_dataset, cfg_sampling):
 
     cfg_version = load_config(f"{model_dir}/config.yaml")
 
@@ -21,8 +21,9 @@ def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
     model.to(device)
 
 
-    stats = load_stats(load_dir=data_dir)
+    dataset_stats = load_stats(load_dir=data_dir)
     standardize_vars = cfg_version.data_loader.standardize_vars
+    convert_to_voxel = getattr(getattr(cfg_version, "sampling", None), "convert_to_voxels", False)
 
     print("Starting sampling")
 
@@ -30,12 +31,13 @@ def run_generation(model_dir, data_dir, save_dir, cfg_filters, cfg_sampling):
         
         loader = create_loader(
             standardize_vars=standardize_vars, 
-            stats=stats, 
+            stats=dataset_stats, 
+            c_vars = cfg_version.model.input_vars.c_vars
             **vars(cfg_sampling.data_loader)
             )
                   
         dataset = generate_samples(model, loader)
-        postprocess_data(dataset, stats, cfg_filters, standardize_vars)
+        postprocess_data(dataset, dataset_stats, cfg_dataset, standardize_vars, convert_to_voxel)
         save_data(dataset, save_dir, stage="sampled", file_name=f"file_{i+1}")
 
     print("Finished sampling")

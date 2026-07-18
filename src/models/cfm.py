@@ -19,12 +19,22 @@ class ConditionalFlowMatching(BaseModel):
 
         super().__init__()
 
-        self.num_voxels = getattr(cfg, "num_voxels", None) # only for sampling! 
 
-        # auxillary model used for inference     
-        self.aux_model = None
-        self.aux_model_dir = cfg.aux_model.model_dir
-        self.aux_model_name = cfg.aux_model.name
+        # ONLY RELEVANT FOR SAMPLING. 
+        # This decides wheter we are using point or voxel. 
+        self.num_voxels = getattr(cfg, "num_voxels", None) # voxel-based.
+        self.use_aux_model = getattr(cfg, "aux_model", None) is not None # point-based.
+
+        if self.num_voxels is not None and self.use_aux_model:
+            raise ValueError(
+                "Both num_voxels and aux_model are set."
+            )
+
+        # get aux model
+        if self.use_aux_model is not None:
+            self.aux_model = None
+            self.aux_model_dir = cfg.aux_model.model_dir
+            self.aux_model_name = cfg.aux_model.name
 
         # number integration steps 
         self.num_steps = cfg.num_steps
@@ -148,7 +158,16 @@ class ConditionalFlowMatching(BaseModel):
 
         device = c.device
 
-        if self.num_voxels is not None:
+        if self.use_aux_model:
+
+            # load aux model if it does not exist
+            if self.aux_model is None:
+                self._load_model_aux(device)
+
+            return self.aux_model.sample_num_points(c)
+
+
+        elif self.num_voxels is not None:
 
             return torch.full(
                 (c.shape[0],),
@@ -157,12 +176,10 @@ class ConditionalFlowMatching(BaseModel):
                 device=device,
             )
         
-        # load aux model if it does not exist
-        if self.aux_model is None:
-            self._load_model_aux(device)
-
-        # sample from auxilary model
-        return self.aux_model.sample_num_points(c)
+        else:
+            raise ValueError(
+                "Neither num_voxels nor aux_model are specified"
+            )
 
 
     def sample_noise(self, num_points):

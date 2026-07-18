@@ -64,6 +64,8 @@ def voxel_to_point(dataset, binning):
 
 def point_to_voxel(dataset, binning):
 
+    print("Converting point into voxel")
+
     z = dataset.data["z_hat_norm"]
 
     if {"x_hat_norm", "y_hat_norm"} <= dataset.data.keys():

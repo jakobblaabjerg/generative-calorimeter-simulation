@@ -270,6 +270,7 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         stats,
         conditions,
         sampling_specs,
+        c_vars,
         seed,
         split=None
         ):
@@ -280,11 +281,6 @@ class ConditionalTorchDataset(torch.utils.data.Dataset):
         normalize_meta(self.dataset, inverse=False)
         standardize_data(self.dataset, stats, standardize_vars)
 
-
-        if "theta" in vars(conditions) and "phi" in vars(conditions):
-            c_vars = ["dir_x", "dir_y", "dir_z", "e_inc"] # MUST MATCH MODEL 
-        else:
-            c_vars = ["e_inc"]
         self.c_vars = [feature_name(var, None) for var in c_vars]
         
 

@@ -36,20 +36,16 @@ def preprocess_data(dataset, config, save_dir, file_name, debug):
 
     remove_unused_data(dataset, config.keepvars, "norm")
 
-def postprocess_data(dataset, stats, config, standardize_vars):
+def postprocess_data(dataset, stats, config, standardize_vars, convert_to_voxel):
     
     standardize_data(dataset, stats, standardize_vars, inverse=True)
     normalize_data(dataset, config, inverse=True)
     
-
-    # fragile!!
-    if "z_hat_norm" in dataset.data and "z_hat" not in dataset.data:       
+    if convert_to_voxel:
         point_to_voxel(dataset, config.binning)
-    elif "z_hat_norm" not in dataset.data:
-        pass
-    else:
-        compute_geometric_features(dataset, inverse=True)
 
+    if "z_hat_norm" in dataset.data:
+        compute_geometric_features(dataset, inverse=True)
 
 
 def create_splits(dataset, ratios, seed=42):
