@@ -42,8 +42,9 @@ def postprocess_data(dataset, stats, config, standardize_vars, convert_to_voxel)
     normalize_data(dataset, config, inverse=True)
     
     if convert_to_voxel:
+        print("JAKOB")
         point_to_voxel(dataset, config.binning)
-
+    
     if "z_hat_norm" in dataset.data:
         compute_geometric_features(dataset, inverse=True)
 
