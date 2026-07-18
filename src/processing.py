@@ -41,6 +41,8 @@ def postprocess_data(dataset, stats, config, standardize_vars, convert_to_voxel)
     standardize_data(dataset, stats, standardize_vars, inverse=True)
     normalize_data(dataset, config, inverse=True)
     
+    print(convert_to_voxel)
+
     if convert_to_voxel:
         print("JAKOB")
         point_to_voxel(dataset, config.binning)
