@@ -23,7 +23,7 @@ def run_generation(model_dir, data_dir, save_dir, cfg_dataset, cfg_sampling):
 
     dataset_stats = load_stats(load_dir=data_dir)
     standardize_vars = cfg_version.data_loader.standardize_vars
-    convert_to_voxel = getattr(getattr(cfg_version, "sampling", None), "convert_to_voxels", False)
+    convert_to_voxel = getattr(getattr(cfg_version, "sampling", None), "convert_to_voxel", False)
 
     print("Starting sampling")
 
@@ -32,7 +32,7 @@ def run_generation(model_dir, data_dir, save_dir, cfg_dataset, cfg_sampling):
         loader = create_loader(
             standardize_vars=standardize_vars, 
             stats=dataset_stats, 
-            c_vars = cfg_version.model.input_vars.c_vars
+            c_vars = cfg_version.model.input_vars.c_vars,
             **vars(cfg_sampling.data_loader)
             )
                   
