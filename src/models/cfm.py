@@ -31,7 +31,7 @@ class ConditionalFlowMatching(BaseModel):
             )
 
         # get aux model
-        if self.use_aux_model is not None:
+        if self.use_aux_model:
             self.aux_model = None
             self.aux_model_dir = cfg.aux_model.model_dir
             self.aux_model_name = cfg.aux_model.name
