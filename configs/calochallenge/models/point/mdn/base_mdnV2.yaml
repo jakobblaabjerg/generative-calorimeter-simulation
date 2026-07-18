@@ -57,3 +57,6 @@ data_loader:
     name: "sparse"
 
 
+sampling:
+  convert_to_voxel: True
+
