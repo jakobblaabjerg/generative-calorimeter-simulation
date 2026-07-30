@@ -225,15 +225,21 @@ class ConditionalFlowMatching(BaseModel):
         X_1 = X_1.cpu().numpy()      
         context = context.cpu().numpy()
 
-        history = [(X_t.cpu().numpy(), v_t.cpu().numpy()) for X_t, v_t in history]
+        history = [(
+            h["X_t"].cpu().numpy(),
+            h["v_t"].cpu().numpy(),
+            )
+            for h in history
+        ]
+
         num_points = num_points.cpu().numpy().astype(int)  
 
         for j, var in enumerate(self.z_vars):
             data[var] = X_1[:, j]
 
             if self.track_history:
-                data[f"{var}_hist"] = np.stack([s[0][:, j] for s in history], axis=1)
-                data[f"v_{var}_hist"] = np.stack([s[1][:, j] for s in history], axis=1)
+                data[f"{var}_his"] = np.stack([h[0][:, j] for h in history], axis=1)
+                data[f"v_{var}_his"] = np.stack([h[1][:, j] for h in history], axis=1)
 
         for j, var in enumerate(self.c_vars):
             meta[var] = context[:, j]    
