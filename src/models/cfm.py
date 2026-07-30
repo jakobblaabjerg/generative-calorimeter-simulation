@@ -11,6 +11,7 @@ from src.calosim import CaloSimDataset
 
 import torch
 import numpy as np
+from src.solvers.euler import EulerSolver
 
 @register_model("cfm")
 class ConditionalFlowMatching(BaseModel):
@@ -91,58 +92,56 @@ class ConditionalFlowMatching(BaseModel):
 
         raise ValueError(f"Unknown encoder: {self.encoder_name}")
 
-    @staticmethod
-    def z_t(z_0, z_1, t):
-        return t * z_1 + (1-t) * z_0
-
 
     @staticmethod
-    def v_t(z_0, z_1):
-        return z_1 - z_0
+    def X_t(X_0, X_1, t):
+        return t * X_1 + (1-t) * X_0
 
+    @staticmethod
+    def v_t(X_0, X_1):
+        return X_1 - X_0
 
-    def v_theta(self, z_t, t, c, num_points):
+    def v_model(self, X_t, t, context, num_points):
         
         if self.encoder is None:
-            inputs = torch.cat([z_t, t, c], dim=-1)
-            loss_reg = torch.tensor(0.0, device=z_t.device)
+            inputs = torch.cat([X_t, t, context], dim=-1)
+            loss_reg = torch.tensor(0.0, device=X_t.device)
 
         else:
-            inputs, loss_reg = self.encoder(z_t, t, c, num_points)
+            inputs, loss_reg = self.encoder(X_t, t, context, num_points)
 
         return self.mlp(inputs), loss_reg
 
 
-    def forward(self, x, z, c, num_points):        
-
-        device = z.device
-        batch_size= c.size(0)
+    def forward(self, X_raw, X_1, context, num_points):        
+    
+        device = X_1.device
+        batch_size= context.size(0)
         
-        c_repeated = torch.repeat_interleave(c, num_points, dim=0)
+        context_rep = torch.repeat_interleave(context, num_points, dim=0)
 
         # sample the time step per batch element
         t = torch.rand(batch_size, device=device)
         t = torch.repeat_interleave(t.unsqueeze(-1), num_points, dim=0)
 
-        # sample z_0 from p_0
-        z_0 = torch.randn_like(z)
+        # sample X_0 from p_0
+        X_0 = torch.randn_like(X_1)
 
-        z_t = self.z_t(z_0, z, t)
-        v_t = self.v_t(z_0, z) 
-        v_theta, loss_reg = self.v_theta(z_t, t, c_repeated, num_points)
+        X_t = self.X_t(X_0, X_1, t)
+        v_t = self.v_t(X_0, X_1) 
+        v_model, loss_reg = self.v_theta(X_t, t, context_rep, num_points)
 
-        loss = self.loss(v_theta, v_t, num_points) + loss_reg
+        loss = self.loss(v_model, v_t, num_points) + loss_reg
         
         return loss
 
 
-    def loss(self, v_theta, v_t, num_points):
+    def loss(self, v_model, v_t, num_points):
         
-        loss = ((v_theta - v_t)**2).sum(dim=-1)  # total loss per point 
+        loss = ((v_model - v_t)**2).sum(dim=-1)  # total loss per point 
         loss = torch.segment_reduce(loss, reduce="mean", lengths=num_points)
         
         return torch.mean(loss)
-
 
     def _load_model_aux(self, device):
 
@@ -181,72 +180,74 @@ class ConditionalFlowMatching(BaseModel):
                 "Neither num_voxels nor aux_model are specified"
             )
 
-
     def sample_noise(self, num_points):
 
         device = num_points.device
         total_points = num_points.sum().item()
         shape = (total_points, self.point_dim)
-        z_t = torch.distributions.Normal(0,1).sample(shape).to(device)
+        noise = torch.distributions.Normal(0,1).sample(shape).to(device)
 
-        return z_t
-
-
-    def solve_ode(self, z_t, c, num_points):
-
-        snapshot_times = [0.0, 0.5, 1.0]
-        steps = {round(t * (self.num_steps - 1)) for t in snapshot_times}
-        states = []
-
-        device = num_points.device
-        total_points = num_points.sum().item()
-        c_repeated = torch.repeat_interleave(c, num_points, dim=0) 
-
-        # step size   
-        delta_t = torch.full((total_points, 1), 1/self.num_steps, device=device)
-
-        # integrate forward Euler
-        for i in range(self.num_steps):            
-            
-            t = (i+1)*delta_t
-            v_theta, _ = self.v_theta(z_t, t, c_repeated, num_points)
-
-            if self.track_history and i in steps:
-                  states.append((z_t.detach().clone(), v_theta.detach()))
-                              
-            z_t += v_theta * delta_t
-
-        return z_t, states
+        return noise
 
 
-    def to_dataset(self, z, c, num_points, states):
+
+
+    def solve_ode(self, X_t, context, num_points):
+
+        solver = EulerSolver(
+            self.num_steps, 
+            self.track_history
+        )
+
+        context_rep = torch.repeat_interleave(
+            context, 
+            num_points, 
+            dim=0
+        ) 
+
+        def velocity_func(X, t):
+            v, _ = self.v_model(
+                X,
+                t,
+                context_rep,
+                num_points
+            )
+            return v
+
+        return solver.solve(func=velocity_func, X_t=X_t)
+
+        
+
+    def to_dataset(self, X_1, context, num_points, history):
         
         data, meta = {}, {}
 
-        z = z.cpu().numpy()      
-        c = c.cpu().numpy()
-        states = [(z.cpu().numpy(), v.cpu().numpy()) for z, v in states]
+        X_1 = X_1.cpu().numpy()      
+        context = context.cpu().numpy()
+
+        history = [(X_t.cpu().numpy(), v_t.cpu().numpy()) for X_t, v_t in history]
         num_points = num_points.cpu().numpy().astype(int)  
 
         for j, var in enumerate(self.z_vars):
-            data[var] = z[:, j]
+            data[var] = X_1[:, j]
 
             if self.track_history:
-                data[f"{var}_hist"] = np.stack([s[0][:, j] for s in states], axis=1)
-                data[f"v_{var}_hist"] = np.stack([s[1][:, j] for s in states], axis=1)
+                data[f"{var}_hist"] = np.stack([s[0][:, j] for s in history], axis=1)
+                data[f"v_{var}_hist"] = np.stack([s[1][:, j] for s in history], axis=1)
 
         for j, var in enumerate(self.c_vars):
-            meta[var] = c[:, j]    
+            meta[var] = context[:, j]    
 
         meta["idx"] = np.arange(len(num_points))
         data["idx"] = np.repeat(meta["idx"], num_points)
 
         return CaloSimDataset(data=data, meta=meta)
 
-    def sample(self, c):
-         
-        num_points = self.sample_num_points(c)
-        z_0 = self.sample_noise(num_points)
-        z, velocities = self.solve_ode(z_0, c, num_points)
 
-        return self.to_dataset(z, c, num_points, velocities)
+    def sample(self, context):
+         
+        num_points = self.sample_num_points(context) # sample number of points per point cloud
+        noise = self.sample_noise(num_points) # sample gaussian noise
+        X_1, his = self.solve_ode(noise, context, num_points) # solve the ode
+
+        return self.to_dataset(X_1, context, num_points, his)
