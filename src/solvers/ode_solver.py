@@ -31,7 +31,7 @@ class ODESolver(ABC):
 
         for i in range(self.num_steps):
 
-            t = times[i] 
+            t = torch.full((X_t.shape[0], 1), times[i], device=X_t.device)
             dt = times[i+1]-times[i]
 
             X_t, info = self.step(func, X_t, t, dt)
