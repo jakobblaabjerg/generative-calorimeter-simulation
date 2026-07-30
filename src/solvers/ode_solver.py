@@ -34,8 +34,7 @@ class ODESolver(ABC):
             t = times[i] 
             dt = times[i+1]-times[i]
 
-            X_t, info = self.step(func, X_t, context, t, dt)
-
+            X_t, info = self.step(func, X_t, t, dt)
 
             # track only pre-defined snapshots!
             if self.track_history and i in snapshots:
