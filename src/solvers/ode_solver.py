@@ -26,13 +26,13 @@ class ODESolver(ABC):
         )
 
         snapshot_times = [0.0, 0.5, 1.0]
-        snapshots = {int(t * self.num_steps-1) for t in snapshot_times}
+        snapshots = {int(t * (self.num_steps-1)) for t in snapshot_times}
         his = []
 
         for i in range(self.num_steps):
 
             t = torch.full((X_t.shape[0], 1), times[i], device=X_t.device)
-            dt = times[i+1]-times[i]
+            dt = torch.full_like(t, times[i + 1] - times[i])
 
             X_t, info = self.step(func, X_t, t, dt)
 
