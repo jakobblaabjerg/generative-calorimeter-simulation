@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
 
+
 class ODESolver(ABC):
 
     def __init__(
@@ -41,6 +42,3 @@ class ODESolver(ABC):
                 his.append(info)
 
         return X_t, his
-
-
-            

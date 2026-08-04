@@ -11,7 +11,7 @@ from src.calosim import CaloSimDataset
 
 import torch
 import numpy as np
-from src.solvers.euler import EulerSolver
+from src.solvers import SOLVERS
 
 @register_model("cfm")
 class ConditionalFlowMatching(BaseModel):
@@ -25,7 +25,7 @@ class ConditionalFlowMatching(BaseModel):
         # This decides wheter we are using point or voxel. 
         self.num_voxels = getattr(cfg, "num_voxels", None) # voxel-based.
         self.use_aux_model = getattr(cfg, "aux_model", None) is not None # point-based.
-
+        
         if self.num_voxels is not None and self.use_aux_model:
             raise ValueError(
                 "Both num_voxels and aux_model are set."
@@ -36,6 +36,9 @@ class ConditionalFlowMatching(BaseModel):
             self.aux_model = None
             self.aux_model_dir = cfg.aux_model.model_dir
             self.aux_model_name = cfg.aux_model.name
+
+        # solver
+        self.sovler = cfg.solver
 
         # number integration steps 
         self.num_steps = cfg.num_steps
@@ -192,30 +195,7 @@ class ConditionalFlowMatching(BaseModel):
 
 
 
-    def solve_ode(self, X_t, context, num_points):
-
-        solver = EulerSolver(
-            self.num_steps, 
-            self.track_history
-        )
-
-        context_rep = torch.repeat_interleave(
-            context, 
-            num_points, 
-            dim=0
-        ) 
-
-        def velocity_func(X, t):
-            v, _ = self.v_model(
-                X,
-                t,
-                context_rep,
-                num_points
-            )
-            return v
-
-        return solver.solve(func=velocity_func, X_t=X_t)
-
+ 
         
 
     def to_dataset(self, X_1, context, num_points, history):
@@ -250,10 +230,37 @@ class ConditionalFlowMatching(BaseModel):
         return CaloSimDataset(data=data, meta=meta)
 
 
-    def sample(self, context):
-         
-        num_points = self.sample_num_points(context) # sample number of points per point cloud
-        noise = self.sample_noise(num_points) # sample gaussian noise
-        X_1, his = self.solve_ode(noise, context, num_points) # solve the ode
 
-        return self.to_dataset(X_1, context, num_points, his)
+    def sample(self, context):
+
+         # sample number of points per point cloud
+        num_points = self.sample_num_points(context) 
+
+        # sample gaussian noise
+        noise = self.sample_noise(num_points) 
+
+        # solve the ode
+        X_1, history = self.solve_ode(noise, context, num_points) 
+
+        # convert to dataset
+        dataset = self.to_dataset(X_1, context, num_points, history)
+
+        return dataset
+
+
+    def solve_ode(self, X_t, context, num_points):
+
+        try:
+            solver = SOLVERS[self.solver](self.num_steps, self.track_history)
+        except KeyError:
+            raise ValueError(f"Unknown solver: {self.solver!r}")
+
+        # repeat context vector 
+        context_rep = torch.repeat_interleave(context, num_points, dim=0) 
+
+        # create function of X and t. Context and num_points are fixed. 
+        def velocity_func(X, t):
+            v, _ = self.v_model(X, t, context_rep, num_points)
+            return v
+
+        return solver.solve(func=velocity_func, X_t=X_t)
