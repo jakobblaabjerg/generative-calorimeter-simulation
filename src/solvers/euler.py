@@ -7,6 +7,9 @@ class EulerSolver(ODESolver):
         v_t = func(X_t, t)
         X_next = X_t + dt*v_t
 
+        print("dt:", dt.mean().item())
+        print("update:", (dt * v_t).abs().mean().item())
+
         return X_next, {
             "X_t": X_t.detach(),
             "v_t": v_t.detach()
