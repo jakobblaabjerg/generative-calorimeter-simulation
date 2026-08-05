@@ -38,7 +38,7 @@ class ConditionalFlowMatching(BaseModel):
             self.aux_model_name = cfg.aux_model.name
 
         # solver
-        self.sovler = cfg.solver
+        self.solver = cfg.solver
 
         # number integration steps 
         self.num_steps = cfg.num_steps
