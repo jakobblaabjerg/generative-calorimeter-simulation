@@ -10,10 +10,10 @@ class HeunSolver(ODESolver):
         X_next = X_t + dt * (k_1 + k_2)/2
 
 
-        print("dt:", dt.mean().item())
-        print("k1:", k_1.abs().mean().item())
-        print("k2:", k_2.abs().mean().item())
-        print("update:", (dt * (k_1 + k_2) / 2).abs().mean().item())
+        # print("dt:", dt.mean().item())
+        # print("k1:", k_1.abs().mean().item())
+        # print("k2:", k_2.abs().mean().item())
+        # print("update:", (dt * (k_1 + k_2) / 2).abs().mean().item())
 
 
         return X_next, {
