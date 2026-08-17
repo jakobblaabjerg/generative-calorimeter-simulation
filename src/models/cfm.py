@@ -214,9 +214,6 @@ class ConditionalFlowMatching(BaseModel):
 
         num_points = num_points.cpu().numpy().astype(int)  
 
-
-
-
         for j, var in enumerate(self.z_vars):
             data[var] = X_1[:, j]
 
@@ -224,16 +221,6 @@ class ConditionalFlowMatching(BaseModel):
                 data[f"{var}_his"] = np.stack([h[0][:, j] for h in history], axis=1)
                 data[f"v_{var}_his"] = np.stack([h[1][:, j] for h in history], axis=1)
 
-
-                history_data = np.stack(
-                    [h[0][:, j] for h in history],
-                    axis=1
-                )
-
-                print(history_data.shape)
-
-                # Check whether every time step is identical to the first
-                print(np.allclose(history_data, history_data[:, [0]]))
 
         for j, var in enumerate(self.c_vars):
             meta[var] = context[:, j]    
@@ -254,10 +241,30 @@ class ConditionalFlowMatching(BaseModel):
         noise = self.sample_noise(num_points) 
 
         # solve the ode
-        X_1, history = self.solve_ode(noise, context, num_points) 
+        # X_1, history = self.solve_ode(noise, context, num_points) 
+
+
+
+        z_t = noise
+        device = num_points.device
+        total_points = num_points.sum().item()
+        c_repeated = torch.repeat_interleave(context, num_points, dim=0) 
+
+        delta_t = torch.full((total_points, 1), 1/self.num_steps, device=device)
+
+        for i in range(self.num_steps):            
+            
+            t = (i+1)*delta_t
+            v_theta, _ = self.v_theta(noise, t, c_repeated, num_points)
+
+            z_t += v_theta * delta_t
+
+        history = []
+        X_1 = z_t
 
         # convert to dataset
         dataset = self.to_dataset(X_1, context, num_points, history)
+
 
         return dataset
 
