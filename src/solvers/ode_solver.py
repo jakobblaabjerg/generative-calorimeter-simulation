@@ -23,7 +23,7 @@ class ODESolver(ABC):
             t_0,
             t_1,
             self.num_steps + 1,
-            device=X_t.device
+            device=noise.device
         )
 
         snapshot_times = [0.0, 0.5, 1.0]
