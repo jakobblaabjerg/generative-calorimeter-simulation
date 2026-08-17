@@ -17,7 +17,7 @@ class ODESolver(ABC):
     def step(self, func, X_t, t, dt):
         pass
 
-    def solve(self, func, X_t, t_0=0, t_1=1):
+    def solve(self, func, noise, t_0=0, t_1=1):
 
         times = torch.linspace(
             t_0,
@@ -29,6 +29,8 @@ class ODESolver(ABC):
         snapshot_times = [0.0, 0.5, 1.0]
         snapshots = {int(t * (self.num_steps-1)) for t in snapshot_times}
         his = []
+
+        X_t = noise
 
         for i in range(self.num_steps):
 
