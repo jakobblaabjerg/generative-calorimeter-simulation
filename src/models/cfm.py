@@ -132,7 +132,7 @@ class ConditionalFlowMatching(BaseModel):
 
         X_t = self.X_t(X_0, X_1, t)
         v_t = self.v_t(X_0, X_1) 
-        v_model, loss_reg = self.v_theta(X_t, t, context_rep, num_points)
+        v_model, loss_reg = self.v_model(X_t, t, context_rep, num_points)
 
         loss = self.loss(v_model, v_t, num_points) + loss_reg
         
@@ -245,6 +245,11 @@ class ConditionalFlowMatching(BaseModel):
         # convert to dataset
         dataset = self.to_dataset(X_1, context, num_points, history)
 
+        print("noise mean:", noise.abs().mean())
+        print("final mean:", X_1.abs().mean())
+        print("difference:", (X_1 - noise).abs().mean())
+
+
         return dataset
 
 
@@ -264,3 +269,4 @@ class ConditionalFlowMatching(BaseModel):
             return v
 
         return solver.solve(func=velocity_func, X_t=X_t)
+
