@@ -255,7 +255,7 @@ class ConditionalFlowMatching(BaseModel):
         for i in range(self.num_steps):            
             
             t = (i+1)*delta_t
-            v_theta, _ = self.v_theta(noise, t, c_repeated, num_points)
+            v_theta, _ = self.v_model(noise, t, c_repeated, num_points)
 
             z_t += v_theta * delta_t
 
