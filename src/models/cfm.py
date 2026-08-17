@@ -214,12 +214,26 @@ class ConditionalFlowMatching(BaseModel):
 
         num_points = num_points.cpu().numpy().astype(int)  
 
+
+
+
         for j, var in enumerate(self.z_vars):
             data[var] = X_1[:, j]
 
             if self.track_history:
                 data[f"{var}_his"] = np.stack([h[0][:, j] for h in history], axis=1)
                 data[f"v_{var}_his"] = np.stack([h[1][:, j] for h in history], axis=1)
+
+
+                history_data = np.stack(
+                    [h[0][:, j] for h in history],
+                    axis=1
+                )
+
+                print(history_data.shape)
+
+                # Check whether every time step is identical to the first
+                print(np.allclose(history_data, history_data[:, [0]]))
 
         for j, var in enumerate(self.c_vars):
             meta[var] = context[:, j]    
@@ -262,29 +276,6 @@ class ConditionalFlowMatching(BaseModel):
         def velocity_func(X, t):
             v, _ = self.v_model(X, t, context_rep, num_points)
             return v
-
-
-        noise = self.sample_noise(num_points)
-
-        X_euler, _ = SOLVERS["euler"](40, False).solve(
-            velocity_func,
-            noise.clone()
-        )
-
-        X_heun, _ = SOLVERS["heun"](40, False).solve(
-            velocity_func,
-            noise.clone()
-        )
-
-        print("Euler displacement:",
-            (X_euler - noise).abs().mean().item())
-
-        print("Heun displacement:",
-            (X_heun - noise).abs().mean().item())
-
-        print("Euler vs Heun:",
-            (X_euler - X_heun).abs().mean().item())
-
-
+        
         return solver.solve(func=velocity_func, noise=noise)
 
