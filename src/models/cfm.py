@@ -245,15 +245,10 @@ class ConditionalFlowMatching(BaseModel):
         # convert to dataset
         dataset = self.to_dataset(X_1, context, num_points, history)
 
-        print("noise mean:", noise.abs().mean())
-        print("final mean:", X_1.abs().mean())
-        print("difference:", (X_1 - noise).abs().mean())
-
-
         return dataset
 
 
-    def solve_ode(self, X_t, context, num_points):
+    def solve_ode(self, noise, context, num_points):
 
         try:
             solver = SOLVERS[self.solver](self.num_steps, self.track_history)
@@ -268,5 +263,28 @@ class ConditionalFlowMatching(BaseModel):
             v, _ = self.v_model(X, t, context_rep, num_points)
             return v
 
-        return solver.solve(func=velocity_func, X_t=X_t)
+
+        noise = self.sample_noise(num_points)
+
+        X_euler, _ = SOLVERS["euler"](40, False).solve(
+            velocity_func,
+            noise.clone()
+        )
+
+        X_heun, _ = SOLVERS["heun"](40, False).solve(
+            velocity_func,
+            noise.clone()
+        )
+
+        print("Euler displacement:",
+            (X_euler - noise).abs().mean().item())
+
+        print("Heun displacement:",
+            (X_heun - noise).abs().mean().item())
+
+        print("Euler vs Heun:",
+            (X_euler - X_heun).abs().mean().item())
+
+
+        return solver.solve(func=velocity_func, noise=noise)
 
