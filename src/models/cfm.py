@@ -205,12 +205,14 @@ class ConditionalFlowMatching(BaseModel):
         X_1 = X_1.cpu().numpy()      
         context = context.cpu().numpy()
 
-        history = [(
-            h["X_t"].cpu().numpy(),
-            h["v_t"].cpu().numpy(),
-            )
-            for h in history
-        ]
+        if history:
+            
+            history = [(
+                h["X_t"].cpu().numpy(),
+                h["v_t"].cpu().numpy(),
+                )
+                for h in history
+            ]
 
         num_points = num_points.cpu().numpy().astype(int)  
 
