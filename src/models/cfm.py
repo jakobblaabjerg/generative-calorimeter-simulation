@@ -243,30 +243,14 @@ class ConditionalFlowMatching(BaseModel):
         noise = self.sample_noise(num_points) 
 
         # solve the ode
-        # X_1, history = self.solve_ode(noise, context, num_points) 
+        X_1, history = self.solve_ode(noise, context, num_points) 
 
-
-
-        z_t = noise
-        device = num_points.device
-        total_points = num_points.sum().item()
-        c_repeated = torch.repeat_interleave(context, num_points, dim=0) 
-
-        delta_t = torch.full((total_points, 1), 1/self.num_steps, device=device)
-
-        for i in range(self.num_steps):            
-            
-            t = (i+1)*delta_t
-            v_theta, _ = self.v_model(noise, t, c_repeated, num_points)
-
-            z_t += v_theta * delta_t
-
-        history = []
-        X_1 = z_t
+        print("noise:", noise.abs().mean().item())
+        print("X_1:  ", X_1.abs().mean().item())
+        print("diff: ", (X_1 - noise).abs().mean().item())
 
         # convert to dataset
         dataset = self.to_dataset(X_1, context, num_points, history)
-
 
         return dataset
 
