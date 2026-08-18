@@ -7,7 +7,6 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_dir", type=str, required=True)
-    parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
     parser.add_argument("--config_filters", type=str, default="configs/filters.yaml")
     parser.add_argument("--config_sampling", type=str, default="configs/sampling.yaml")
@@ -32,7 +31,6 @@ def main():
 
     run_generation(
         model_dir=args.model_dir,
-        data_dir=args.data_dir,
         save_dir=args.save_dir,
         cfg_dataset=cfg_filters,
         cfg_sampling=cfg_sampling, 
