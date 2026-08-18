@@ -17,30 +17,21 @@ class ODESolver(ABC):
     def step(self, func, X_t, t, dt):
         pass
 
-    def solve(self, func, noise, t_0=0, t_1=1):
+    def solve(self, func, noise):
 
-        times = torch.linspace(
-            t_0,
-            t_1,
-            self.num_steps + 1,
-            device=noise.device
-        )
-
-        snapshot_times = [0.0, 0.5, 1.0]
-        snapshots = {int(t * (self.num_steps-1)) for t in snapshot_times}
-        his = []
-
-        X_t = noise
+        history = [] # for tracking velocities 
+        snapshots = {int(t * (self.num_steps-1)) for t in [0.0, 0.5, 1.0]}
+        dt_scalar = 1 / self.num_steps
+        X_t = noise.clone()
 
         for i in range(self.num_steps):
 
-            t = torch.full((X_t.shape[0], 1), times[i], device=X_t.device)
-            dt = torch.full_like(t, times[i + 1] - times[i])
-
+            t = torch.full((X_t.shape[0], 1), i*dt_scalar, device=X_t.device)
+            dt = torch.full_like(t, dt_scalar)
             X_t, info = self.step(func, X_t, t, dt)
 
             # track only pre-defined snapshots!
             if self.track_history and i in snapshots:
-                his.append(info)
+                history.append(info)
 
-        return X_t, his
+        return X_t, history

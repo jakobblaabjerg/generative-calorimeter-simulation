@@ -245,10 +245,6 @@ class ConditionalFlowMatching(BaseModel):
         # solve the ode
         X_1, history = self.solve_ode(noise, context, num_points) 
 
-        print("noise:", noise.abs().mean().item())
-        print("X_1:  ", X_1.abs().mean().item())
-        print("diff: ", (X_1 - noise).abs().mean().item())
-
         # convert to dataset
         dataset = self.to_dataset(X_1, context, num_points, history)
 
