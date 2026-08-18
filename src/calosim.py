@@ -9,7 +9,7 @@ class CaloSimDataset:
 
     data: dict = field(default_factory=dict)           
     meta: dict = field(default_factory=dict)
-    view: Optional[str] = None
+    representation: Optional[str] = None
 
     @property 
     def num_events(self):

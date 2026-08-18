@@ -6,7 +6,7 @@ transforms:
   meta: ["e_inc"]
   data: ["e_deposit"]
 filters: []   
-view: point
+to_pointcloud: False
 binning:
   r: 9
   a: 16

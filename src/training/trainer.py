@@ -5,6 +5,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import torch
 import math
+import shutil
+import os
 
 from src.utils import set_seed
 from src.logger import Logger
@@ -148,14 +150,18 @@ def run_train(cfg, seed=None):
     train_loader = create_loader(split="train", **vars(cfg.data_loader))
     val_loader = create_loader(split="val", **vars(cfg.data_loader))
 
-
     print("Initializing model")
     model = MODEL_REGISTRY[cfg.name](cfg.model)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     optimizer = create_optimizer(model, cfg.optimizer)
 
-
     print("Starting training")
     trainer = Trainer(model, optimizer, run_dir, **vars(cfg.trainer))
     trainer.fit(train_loader, val_loader, seed)
+
+    # save stats
+    shutil.copy2(
+        os.path.join(cfg.data_loader.load_dir, "stats.json"),
+        os.path.join(cfg.run_dir, "stats.json"),
+    )

@@ -256,7 +256,6 @@ class ConditionalFlowMatching(BaseModel):
     def solve_ode(self, noise, context, num_points):
 
         try:
-            print(f"SOLVER: {self.solver}")
             solver = SOLVERS[self.solver](self.num_steps, self.track_history)
         except KeyError:
             raise ValueError(f"Unknown solver: {self.solver!r}")

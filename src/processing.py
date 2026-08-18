@@ -41,10 +41,7 @@ def postprocess_data(dataset, stats, config, standardize_vars, convert_to_voxel)
     standardize_data(dataset, stats, standardize_vars, inverse=True)
     normalize_data(dataset, config, inverse=True)
     
-    print(convert_to_voxel)
-
     if convert_to_voxel:
-        print("JAKOB")
         point_to_voxel(dataset, config.binning)
     
     if "z_hat_norm" in dataset.data:
@@ -124,8 +121,11 @@ def build_dataset(load_dir, save_dir, config, debug=False):
             dataset = load_raw(path, config.name)
         else:
             dataset = CaloSimDataset.from_npz(path)
-   
-        if config.view == "point" and dataset.view == "voxel":
+  
+        if config.to_pointcloud == "point":
+
+            if dataset.rerpesentation == "point":
+                raise ValueError("Dataset is already a point cloud.")
             voxel_to_point(dataset, config.binning)
 
         preprocess_data(dataset, config, save_dir, f_name, debug)

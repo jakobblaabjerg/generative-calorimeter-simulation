@@ -11,7 +11,7 @@ class CaloChallenge:
         with h5py.File(file_path, "r") as f:
             data = cls._extract_showers(f)
             meta = cls._extract_incident_energies(f)
-            dataset = CaloSimDataset(data=data, meta=meta, view="voxel")
+            dataset = CaloSimDataset(data=data, meta=meta, representation="voxel")
         
         return dataset
     

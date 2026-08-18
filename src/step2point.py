@@ -24,7 +24,7 @@ class Step2Point:
             data = cls._extract_steps(f)
             # data = cls._decode_subdetector(f, data)
             meta = cls._extract_primary(f)
-            dataset = CaloSimDataset(data=data, meta=meta, view="point")
+            dataset = CaloSimDataset(data=data, meta=meta, representation="point")
 
         dataset.sync()
         dataset.reindex()

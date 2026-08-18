@@ -2,7 +2,7 @@ name: step2point
 normalize: True
 keepvars: ["x_hat", "y_hat", "z_hat", "r_hat", "theta", "phi", "e", "e_inc", "eid", "idx", "t"]  
 split_ratios: [0.8, 0.1, 0.1]
-view: point
+to_pointcloud: False
 transforms:
   meta: ["e_inc", "direction"]
   data: ["e_deposit", "xy_position", "z_position", "r_position"]            
