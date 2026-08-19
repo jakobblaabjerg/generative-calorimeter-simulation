@@ -41,10 +41,10 @@ def postprocess_data(dataset, stats, config, standardize_vars, convert_to_voxel)
     standardize_data(dataset, stats, standardize_vars, inverse=True)
     normalize_data(dataset, config, inverse=True)
     
-    if convert_to_voxel:
+    if convert_to_voxel: # this removes z_hat for voxel
         point_to_voxel(dataset, config.binning)
-    
-    if "z_hat_norm" in dataset.data:
+
+    if any(key.startswith("z_hat") and key.endswith("norm") for key in dataset.data):
         compute_geometric_features(dataset, inverse=True)
 
 
