@@ -5,7 +5,7 @@ from contextlib import nullcontext
 from src.utils import move_to_device
 
 
-def run_step(model, batch, optimizer=None):
+def run_step(model, batch, optimizer, scheduler):
 
     device = model.device
     batch = move_to_device(batch, device)
@@ -19,13 +19,16 @@ def run_step(model, batch, optimizer=None):
         loss_total.backward()
         optimizer.step()
 
+        if scheduler is not None:
+            scheduler.step(optimizer)
+
     # detach from computational graph
     loss_b = [l.detach().item() for l in loss_b]
 
     return loss_b
 
 
-def run_epoch(model, loader, optimizer=None, desc="", postfix_key="loss"):
+def run_epoch(model, loader, optimizer=None, scheduler=None, desc="", postfix_key="loss"):
 
     iterator = tqdm(loader, desc=desc, leave=False)
     is_train = optimizer is not None
@@ -38,7 +41,7 @@ def run_epoch(model, loader, optimizer=None, desc="", postfix_key="loss"):
 
         for batch in iterator:
 
-            loss_b = run_step(model, batch, optimizer)
+            loss_b = run_step(model, batch, optimizer, scheduler)
 
             if loss_total is None:
                 loss_total = [0.0] * len(loss_b)
