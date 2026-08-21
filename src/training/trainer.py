@@ -66,6 +66,9 @@ class LearningRateScheduler:
 
         self.num_steps += 1
 
+        if self.num_steps == self.warmup_steps + 1 and self.warmup_steps > 0:
+            print(f"Warmup finished at step {self.num_steps}")
+
         if not self.warmup_finished:
             self._warmup(optimizer)
 
@@ -99,7 +102,7 @@ class LearningRateScheduler:
 
     @property
     def warmup_finished(self):
-        return self.num_steps >= self.warmup_steps
+        return self.num_steps > self.warmup_steps
 
 
 class Trainer:
@@ -237,3 +240,7 @@ def run_train(cfg, seed=None):
         os.path.join(cfg.data_loader.load_dir, "stats.json"),
         os.path.join(cfg.run_dir, "stats.json"),
     )
+
+# free, total = torch.cuda.mem_get_info()
+# print(f"Free:  {free / 1024**3:.2f} GB")
+# print(f"Total: {total / 1024**3:.2f} GB")

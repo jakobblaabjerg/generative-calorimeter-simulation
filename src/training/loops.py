@@ -20,7 +20,6 @@ def run_step(model, batch, optimizer, scheduler):
         loss_total.backward()
         
         if scheduler is not None:
-            print("scheduler")
             scheduler.step(optimizer)
 
         optimizer.step()
