@@ -40,69 +40,68 @@ class EarlyStopping:
         )       
 
 
-class LearningRateScheduler:
+def create_scheduler(optimizer, total_steps, config):
 
-    def __init__(
-        self,
-        total_steps,
-        base_lr,
-        warmup_fraction=0.0,
-        schedule="constant",
-        min_lr=0.0,
-    ):
+    warmup_steps = int(config.warmup_fraction * total_steps)
 
-        if schedule not in ("constant", "cosine"):
-            raise ValueError(f"Unknown schedule: {schedule}")
+    if warmup_steps == 0:
 
-        self.total_steps = total_steps
-        self.warmup_steps = int(warmup_fraction * total_steps)
+        if config.schedule == "constant":
+            return torch.optim.lr_scheduler.ConstantLR(
+                optimizer,
+                factor=1.0,
+                total_iters=total_steps,
+            )
 
-        self.base_lr = base_lr
-        self.num_steps = 0 
-        self.schedule = schedule
-        self.min_lr = min_lr
+        elif config.schedule == "cosine":
+            return torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=total_steps,
+                eta_min=config.min_lr,
+            )
 
-    def step(self, optimizer):
+        else:
+            raise ValueError(
+                f"Unknown learning rate schedule: {config.schedule}"
+            )
 
-        self.num_steps += 1
+    # warmup
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=0.01,
+        end_factor=1.0,
+        total_iters=warmup_steps,
+    )
 
-        if self.num_steps == self.warmup_steps + 1 and self.warmup_steps > 0:
-            print(f"Warmup finished at step {self.num_steps}")
+    remaining_steps = total_steps - warmup_steps
 
-        if not self.warmup_finished:
-            self._warmup(optimizer)
+    # after warmup
+    if config.schedule == "constant":
 
-        elif self.schedule == "constant":
-            self._constant(optimizer)
+        after_warmup = torch.optim.lr_scheduler.ConstantLR(
+            optimizer,
+            factor=1.0,
+            total_iters=remaining_steps,
+        )
 
-        elif self.schedule == "cosine":
-            self._cosine(optimizer)
+    elif config.schedule == "cosine":
 
-    def _warmup(self, optimizer):
-        lr = self.base_lr * self.num_steps / self.warmup_steps
-        self._set_lr(lr, optimizer)
+        after_warmup = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=remaining_steps,
+            eta_min=config.min_lr,
+        )
 
-    def _constant(self, optimizer):
-        self._set_lr(self.base_lr, optimizer)
+    else:
+        raise ValueError(
+            f"Unknown learning rate schedule: {config.schedule}"
+        )
 
-    def _cosine(self, optimizer):
-
-        decay_steps = self.total_steps - self.warmup_steps
-        progress = (self.num_steps - self.warmup_steps) / decay_steps
-
-        lr = self.min_lr + 0.5 * (
-            self.base_lr - self.min_lr
-        ) * (1 + math.cos(math.pi * progress))
-
-        self._set_lr(lr, optimizer)
-
-    def _set_lr(self, lr, optimizer):
-        for group in optimizer.param_groups:
-            group["lr"] = lr
-
-    @property
-    def warmup_finished(self):
-        return self.num_steps > self.warmup_steps
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup, after_warmup],
+        milestones=[warmup_steps],
+    )
 
 
 class Trainer:
@@ -152,16 +151,18 @@ class Trainer:
     def fit(self, train_loader, val_loader=None, seed=None):
         
         best_val_loss = float("inf")
-        self.scheduler = None
 
         if self.scheduler_config is not None:
-
-            total_steps = len(train_loader)*self.epochs
-            base_lr = self.optimizer_config.base_lr
-            self.scheduler = LearningRateScheduler(total_steps, base_lr, **vars(self.scheduler_config))
-
+            total_steps = self.epochs * len(train_loader)
+            self.scheduler = create_scheduler(self.optimizer, total_steps, self.scheduler_config)
+        else:
+            self.scheduler = None
 
         for epoch in range(self.epochs):
+
+            for i, group in enumerate(self.optimizer.param_groups):
+                print(f"Group {i}: lr = {group['lr']}")
+
 
             desc = f"Epoch {epoch+1}/{self.epochs}"
             loss_train = run_epoch(self.model, train_loader, self.optimizer, self.scheduler, desc)
@@ -183,19 +184,18 @@ class Trainer:
                 # save new checkpoint if improved
                 if improved:
                     best_val_loss = sum(loss_val)
-                    self.model.save_checkpoint(self.run_dir, self.optimizer, epoch, which="best")
+                    self.model.save_checkpoint(self.run_dir, self.optimizer, self.scheduler, epoch, which="best")
                     print(f"Epoch {epoch+1}: New best model saved (val_loss={sum(loss_val):.4f})")
 
                 # early stopping  
-                if self.scheduler is None or self.scheduler.warmup_finished:
-                    self.early_stopping.step(improved) 
+                self.early_stopping.step(improved) 
 
-                    if self.early_stopping.should_stop: 
-                        print("Early stopping triggered.")
-                        break
+                if self.early_stopping.should_stop: 
+                    print("Early stopping triggered.")
+                    break
 
         # save last checkpoint 
-        self.model.save_checkpoint(self.run_dir, self.optimizer, epoch, which="last")
+        self.model.save_checkpoint(self.run_dir, self.optimizer, self.scheduler, epoch, which="last")
         self.writer.close()
 
 

@@ -27,20 +27,23 @@ class BaseModel(torch.nn.Module):
             checkpoint["model_state_dict"]
         )
 
-    def save_checkpoint(self, save_dir, optimizer, epoch, which):
+    def save_checkpoint(self, save_dir, optimizer, scheduler, epoch, which):
 
         file_path = os.path.join(
             save_dir,
             f"{which}_model.pt"
         )
 
-        torch.save({
+        checkpoint = {
             "epoch": epoch,
             "model_state_dict": self.state_dict(),
             "optimizer_state_dict": optimizer.state_dict()
-            },
-            file_path
-        )
+            }
+
+        if scheduler is not None:
+            checkpoint["scheduler_state_dict"] = scheduler.state_dict()
+
+        torch.save(checkpoint, file_path)
 
 
 

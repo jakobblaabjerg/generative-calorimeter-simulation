@@ -18,11 +18,10 @@ def run_step(model, batch, optimizer, scheduler):
 
         optimizer.zero_grad() 
         loss_total.backward()
+        optimizer.step()
         
         if scheduler is not None:
-            scheduler.step(optimizer)
-
-        optimizer.step()
+            scheduler.step()
 
     # detach from computational graph
     loss_b = [l.detach().item() for l in loss_b]
