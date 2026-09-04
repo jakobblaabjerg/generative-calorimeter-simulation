@@ -227,8 +227,6 @@ class SequenceEncoder(torch.nn.Module):
         batch_size = num_points.size(0)
   
         z_t = self._to_padded(z_t, num_points, batch_size)
-        c = self._to_padded(c, num_points, batch_size)
-        t = self._to_padded(t, num_points, batch_size)
 
         num_points_trunc = torch.clamp(num_points, max=self.max_seq_len)
 
