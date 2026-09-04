@@ -21,7 +21,7 @@
                 "adamw"
             ]
         },
-        "trainer.optimizer.lr": {
+        "trainer.optimizer.base_lr": {
             "type": "log_uniform",
             "min": 1e-05,
             "max": 0.01
