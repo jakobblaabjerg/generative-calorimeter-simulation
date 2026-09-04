@@ -22,10 +22,13 @@ model:
 trainer:
   epochs: 5
   patience: 1
-
-optimizer: 
-  type: adam
-  lr: 0.00001
+  # scheduler:
+  #   min_lr: 0.0
+  #   schedule: "constant"
+  #   warmup_fraction: 0.05
+  optimizer: 
+    type: adam
+    base_lr: 0.00001
 
 logger:
   log_dir: "logs/sweep/cfm"

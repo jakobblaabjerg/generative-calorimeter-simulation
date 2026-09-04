@@ -230,11 +230,9 @@ class SequenceEncoder(torch.nn.Module):
         c = self._to_padded(c, num_points, batch_size)
         t = self._to_padded(t, num_points, batch_size)
 
-        sequence = torch.cat([z_t, t, c], dim=-1)
-
         num_points_trunc = torch.clamp(num_points, max=self.max_seq_len)
 
-        packed = pack_padded_sequence(sequence, num_points_trunc.cpu(), batch_first=True, enforce_sorted=False)
+        packed = pack_padded_sequence(z_t, num_points_trunc.cpu(), batch_first=True, enforce_sorted=False)
         hidden_states, _ = self.rnn(packed)
         hidden_states, _ = pad_packed_sequence(hidden_states, batch_first=True, total_length=self.max_seq_len)
 
@@ -242,8 +240,7 @@ class SequenceEncoder(torch.nn.Module):
         mask = self._create_mask(num_points_trunc, self.max_seq_len, z_t.device)
 
         # later we can add conditionals again v = mlp([z_t, h])
-        return hidden_states[mask], torch.tensor(0.0, device=z_t.device)
-
+        return torch.cat([hidden_states[mask], t, c], dim=-1), torch.tensor(0.0, device=z_t.device)
 
 
 class Pooling(torch.nn.Module):

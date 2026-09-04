@@ -14,14 +14,14 @@
         }
     },
     "optim": {
-        "optimizer.type": {
+        "trainer.optimizer.type": {
             "type": "categorical",
             "values": [
                 "adam",
                 "adamw"
             ]
         },
-        "optimizer.lr": {
+        "trainer.optimizer.lr": {
             "type": "log_uniform",
             "min": 1e-05,
             "max": 0.01
@@ -31,6 +31,8 @@
         "data_loader.batch_size": {
             "type": "categorical",
             "values": [
+                8,
+                16,
                 64,
                 128
             ]

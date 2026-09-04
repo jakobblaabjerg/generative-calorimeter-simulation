@@ -88,7 +88,7 @@ class ConditionalFlowMatching(BaseModel):
             return self.point_dim + self.cond_dim + 1
 
         if self.encoder_name in ["sequence"]:
-            return self.encoder.output_size
+            return self.encoder.output_size + self.cond_dim + 1
 
         if self.encoder_name in ["deepsets", "pointnet"]:
             return self.point_dim + self.cond_dim + 1 + self.encoder.output_size
