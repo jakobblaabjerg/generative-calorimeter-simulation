@@ -91,6 +91,7 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed
     loader = create_loader(                 # very ugly need batch mode now 
         standardize_vars=standardize_vars, 
         stats=stats,
+        c_vars = cfg.model.input_vars.c_vars
         **vars(cfg_sampling.data_loader)
         )
 

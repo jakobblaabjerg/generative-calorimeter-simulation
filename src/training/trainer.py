@@ -231,15 +231,17 @@ def run_train(cfg, seed=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    print("Starting training")
-    trainer = Trainer(model, run_dir, **vars(cfg.trainer))
-    trainer.fit(train_loader, val_loader, seed)
-
     # save stats
     shutil.copy2(
         os.path.join(cfg.data_loader.load_dir, "stats.json"),
         os.path.join(cfg.run_dir, "stats.json"),
     )
+
+    print("Starting training")
+    trainer = Trainer(model, run_dir, **vars(cfg.trainer))
+    trainer.fit(train_loader, val_loader, seed)
+
+
 
 # free, total = torch.cuda.mem_get_info()
 # print(f"Free:  {free / 1024**3:.2f} GB")
