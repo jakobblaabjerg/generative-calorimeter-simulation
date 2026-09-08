@@ -104,14 +104,14 @@ class ConditionalFlowMatching(BaseModel):
     def v_t(X_0, X_1):
         return X_1 - X_0
 
-    def v_model(self, X_t, t, context, num_points):
+    def v_model(self, X_t, t, context, num_points, batch_idx):
         
         if self.encoder is None:
             inputs = torch.cat([X_t, t, context], dim=-1)
             loss_reg = torch.tensor(0.0, device=X_t.device)
 
         else:
-            inputs, loss_reg = self.encoder(X_t, t, context, num_points)
+            inputs, loss_reg = self.encoder(X_t, t, context, num_points, batch_idx)
 
         return self.mlp(inputs), loss_reg
 
@@ -265,12 +265,23 @@ class ConditionalFlowMatching(BaseModel):
         except KeyError:
             raise ValueError(f"Unknown solver: {self.solver!r}")
 
+        batch_size = context.size(0)
+        device = noise.device
+
+        batch_idx = torch.repeat_interleave(
+            torch.arange(batch_size, device=device),
+            num_points,
+            )
+
         # repeat context vector 
-        context_rep = torch.repeat_interleave(context, num_points, dim=0) 
+        context_rep = context[batch_idx] 
+
+
+
 
         # create function of X and t. Context and num_points are fixed. 
         def velocity_func(X, t):
-            v, _ = self.v_model(X, t, context_rep, num_points)
+            v, _ = self.v_model(X, t, context_rep, num_points, batch_idx)
             return v
         
         return solver.solve(func=velocity_func, noise=noise)
