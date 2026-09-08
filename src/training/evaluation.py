@@ -96,7 +96,9 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed
         )
 
     times = []
-    iterator = tqdm(range(num_mc_samples), leave=False)
+    warm_up = 2
+    iterator = tqdm(range(num_mc_samples+warm_up), leave=False)
+
 
     for i in iterator:
         
@@ -108,7 +110,9 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed
         generate_samples(model, loader, return_outputs=False)
         synchronize_cuda(device)
         end = time.time()
-        times.append(end-start)
+
+        if i >= warm_up: # discard first 
+            times.append(end-start)
 
     return compute_mean_std(values=times, prefix="time")
 
