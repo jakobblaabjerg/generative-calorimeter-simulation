@@ -105,14 +105,14 @@ def evaluate_efficiency(model, cfg, cfg_sampling, data_dir, num_mc_samples, seed
         if seed is not None:
             set_seed(seed=seed+i)
 
-        synchronize_cuda(device)
-        start = time.time()
-        generate_samples(model, loader, return_outputs=False)
-        synchronize_cuda(device)
-        end = time.time()
+        # synchronize_cuda(device)
+        # start = time.time()
+        _, time_elapsed = generate_samples(model, loader, return_outputs=False)
+        # synchronize_cuda(device)
+        # end = time.time()
 
         if i >= warm_up: # discard first 
-            times.append(end-start)
+            times.append(time_elapsed)
 
     return compute_mean_std(values=times, prefix="time")
 

@@ -7,6 +7,9 @@ from src.calosim import CaloSimDataset
 from src.utils import move_to_device
 from src.processing import postprocess_data
 
+import time
+from src.utils import synchronize_cuda
+
 from tqdm import tqdm
 import torch
 
@@ -50,14 +53,24 @@ def generate_samples(model, loader, return_outputs=True):
     iterator = tqdm(loader,leave=False)
     model.eval()
 
+    time_elapsed = 0 
+
     with torch.no_grad():
 
         for batch in iterator:
             
             batch = move_to_device(batch, device)
+
+
+            synchronize_cuda(device)
+            start = time.time()
             dataset_b = model.sample(batch)
+            synchronize_cuda(device)
+            end = time.time()
+            time_elapsed += end-start
+
 
             if return_outputs:
                 dataset.append(dataset_b)
 
-    return dataset
+    return dataset, time_elapsed
