@@ -117,22 +117,27 @@ class ConditionalFlowMatching(BaseModel):
 
 
     def forward(self, X_raw, X_1, context, num_points):        
-    
+
         device = X_1.device
         batch_size= context.size(0)
-        
-        context_rep = torch.repeat_interleave(context, num_points, dim=0)
 
+        batch_idx = torch.repeat_interleave(
+            torch.arange(batch_size, device=device),
+            num_points,
+            )
+
+        context = context[batch_idx]
+        
         # sample the time step per batch element
         t = torch.rand(batch_size, device=device)
-        t = torch.repeat_interleave(t.unsqueeze(-1), num_points, dim=0)
+        t = t.unsqueeze(-1)[batch_idx]
 
         # sample X_0 from p_0
         X_0 = torch.randn_like(X_1)
 
         X_t = self.X_t(X_0, X_1, t)
         v_t = self.v_t(X_0, X_1) 
-        v_model, loss_reg = self.v_model(X_t, t, context_rep, num_points)
+        v_model, loss_reg = self.v_model(X_t, t, context, num_points, batch_idx)
 
         loss = self.loss(v_model, v_t, num_points) + loss_reg
         
