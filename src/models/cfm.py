@@ -104,40 +104,35 @@ class ConditionalFlowMatching(BaseModel):
     def v_t(X_0, X_1):
         return X_1 - X_0
 
-    def v_model(self, X_t, t, context, num_points, batch_idx):
+    def v_model(self, X_t, t, context, num_points):
         
         if self.encoder is None:
             inputs = torch.cat([X_t, t, context], dim=-1)
             loss_reg = torch.tensor(0.0, device=X_t.device)
 
         else:
-            inputs, loss_reg = self.encoder(X_t, t, context, num_points, batch_idx)
+            inputs, loss_reg = self.encoder(X_t, t, context, num_points)
 
         return self.mlp(inputs), loss_reg
 
 
     def forward(self, X_raw, X_1, context, num_points):        
-
+    
         device = X_1.device
         batch_size= context.size(0)
-
-        batch_idx = torch.repeat_interleave(
-            torch.arange(batch_size, device=device),
-            num_points,
-            )
-
-        context = context[batch_idx]
         
+        context_rep = torch.repeat_interleave(context, num_points, dim=0)
+
         # sample the time step per batch element
         t = torch.rand(batch_size, device=device)
-        t = t.unsqueeze(-1)[batch_idx]
+        t = torch.repeat_interleave(t.unsqueeze(-1), num_points, dim=0)
 
         # sample X_0 from p_0
         X_0 = torch.randn_like(X_1)
 
         X_t = self.X_t(X_0, X_1, t)
         v_t = self.v_t(X_0, X_1) 
-        v_model, loss_reg = self.v_model(X_t, t, context, num_points, batch_idx)
+        v_model, loss_reg = self.v_model(X_t, t, context_rep, num_points)
 
         loss = self.loss(v_model, v_t, num_points) + loss_reg
         
@@ -265,23 +260,12 @@ class ConditionalFlowMatching(BaseModel):
         except KeyError:
             raise ValueError(f"Unknown solver: {self.solver!r}")
 
-        batch_size = context.size(0)
-        device = noise.device
-
-        batch_idx = torch.repeat_interleave(
-            torch.arange(batch_size, device=device),
-            num_points,
-            )
-
         # repeat context vector 
-        context_rep = context[batch_idx] 
-
-
-
+        context_rep = torch.repeat_interleave(context, num_points, dim=0) 
 
         # create function of X and t. Context and num_points are fixed. 
         def velocity_func(X, t):
-            v, _ = self.v_model(X, t, context_rep, num_points, batch_idx)
+            v, _ = self.v_model(X, t, context_rep, num_points)
             return v
         
         return solver.solve(func=velocity_func, noise=noise)

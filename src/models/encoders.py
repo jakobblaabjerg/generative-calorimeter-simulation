@@ -175,24 +175,12 @@ class DeepSetsEncoder(torch.nn.Module):
         self.pooling = Pooling(method=pooling)
         self.output_size = output_size
 
-    def forward(self, z_t, t, c, num_points, batch_idx):
+    def forward(self, z_t, t, c, num_points):
         phi_output = self.phi_net(z_t)
+        splits = torch.split(phi_output, num_points.tolist(), dim=0)
+        pooled = torch.stack([self.pooling(s) for s in splits]) 
 
-
-
-        pooled = torch.segment_reduce(
-            phi_output,
-            reduce="mean",
-            lengths=num_points,
-        )
-
-        emb = pooled[batch_idx]
-
-
-        # splits = torch.split(phi_output, num_points.tolist(), dim=0)
-        # pooled = torch.stack([self.pooling(s) for s in splits]) 
-
-        # emb = torch.repeat_interleave(pooled, num_points, dim=0)
+        emb = torch.repeat_interleave(pooled, num_points, dim=0)
         
         return torch.cat([z_t, t, c, emb], dim=-1), torch.tensor(0.0, device=z_t.device)
 
